@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>SFTP Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet"/>
+    <style>
+        body { background:#f8f9fa; margin:0; }
+        .sidebar { min-height:100vh; background:#1a1f36; color:#fff; width:220px; position:fixed; top:0; left:0; z-index:100; }
+        .sidebar .brand { padding:20px; font-size:1.1rem; font-weight:700; border-bottom:1px solid #2d3748; }
+        .sidebar .nav-link { color:#a0aec0; padding:9px 12px; display:flex; align-items:center; gap:8px; text-decoration:none; border-radius:6px; margin:2px 8px; font-size:.9rem; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { color:#fff; background:#2d3748; }
+        .sidebar .nav-link.child { padding-left:28px; font-size:.85rem; }
+        .main-content { margin-left:220px; padding:28px; }
+        .table-card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); overflow:hidden; }
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1040; display:none; }
+        .modal-box { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; z-index:1050; width:740px; max-width:96vw; max-height:92vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.18); display:none; }
+        .modal-box .mh { padding:15px 20px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:#fff; z-index:1; }
+        .modal-box .mb { padding:20px; }
+        .badge-on  { background:#d1fae5; color:#065f46; padding:2px 9px; border-radius:20px; font-size:.78rem; }
+        .badge-off { background:#fee2e2; color:#991b1b; padding:2px 9px; border-radius:20px; font-size:.78rem; }
+        .page { display:none; } .page.active { display:block; }
+        .breadcrumb-bar { background:#fff; border-radius:8px; padding:10px 16px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06); display:flex; align-items:center; gap:8px; font-size:.9rem; }
+        .breadcrumb-bar a { color:#4f46e5; text-decoration:none; cursor:pointer; }
+        .breadcrumb-bar a:hover { text-decoration:underline; }
+        .field-error { color:#dc2626; font-size:.8rem; margin-top:3px; }
+        .form-control.is-invalid, .form-select.is-invalid { border-color:#dc2626; }
+        .strength-bar { height:5px; border-radius:3px; margin-top:5px; transition:all .3s; }
+        .pw-hint { font-size:.75rem; color:#6b7280; margin-top:3px; }
+        .section-header { background:#f1f5f9; padding:8px 14px; font-size:.8rem; font-weight:600; color:#475569; text-transform:uppercase; letter-spacing:.05em; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar d-flex flex-column">
+    <div class="brand"><i class="bi bi-cloud-arrow-up me-2"></i>SFTP Manager</div>
+    <nav class="mt-3" id="sidebar-nav">
+        <a href="#" class="nav-link active" data-page="users"><i class="bi bi-people"></i>Users</a>
+        <a href="#" class="nav-link" data-page="sftp"><i class="bi bi-hdd-network"></i>SFTP Services</a>
+        <a href="#" class="nav-link" data-page="controls"><i class="bi bi-sliders"></i>Account Controls</a>
+        <a href="#" class="nav-link" data-page="settings"><i class="bi bi-gear"></i>Runtime Settings</a>
+    </nav>
+</div>
+
+<div class="main-content">
+    <!-- Users -->
+    <div class="page active" id="page-users">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0">Users</h4>
+            <button class="btn btn-primary btn-sm" onclick="openUserForm()"><i class="bi bi-plus-lg me-1"></i>Add User</button>
+        </div>
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Company</th><th>Plan</th><th>Country</th><th>SFTP Services</th><th></th></tr></thead>
+                <tbody id="users-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- SFTP Services -->
+    <div class="page" id="page-sftp">
+        <div id="sftp-breadcrumb" class="breadcrumb-bar" style="display:none"></div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0" id="sftp-title">SFTP Services</h4>
+            <button class="btn btn-primary btn-sm" onclick="openSftpForm()"><i class="bi bi-plus-lg me-1"></i>Add Service</button>
+        </div>
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr><th>Name</th><th>Host</th><th>Owner</th><th>Accounts</th><th>IP Rules</th><th>Created</th><th></th></tr></thead>
+                <tbody id="sftp-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Service Accounts (child of SFTP Service) -->
+    <div class="page" id="page-accounts">
+        <div id="accounts-breadcrumb" class="breadcrumb-bar"></div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0" id="accounts-title">Service Accounts</h4>
+            <button class="btn btn-primary btn-sm" onclick="openAccountForm()"><i class="bi bi-plus-lg me-1"></i>Add Account</button>
+        </div>
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr><th>Username</th><th>Auth Type</th><th>Status</th><th></th></tr></thead>
+                <tbody id="accounts-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- IP Whitelist (child of SFTP Service) -->
+    <div class="page" id="page-whitelist">
+        <div id="whitelist-breadcrumb" class="breadcrumb-bar"></div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0" id="whitelist-title">IP Whitelist</h4>
+            <button class="btn btn-primary btn-sm" onclick="openWhitelistForm()"><i class="bi bi-plus-lg me-1"></i>Add IP</button>
+        </div>
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr><th>IP Address / CIDR</th><th>Status</th><th></th></tr></thead>
+                <tbody id="whitelist-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Account Controls -->
+    <div class="page" id="page-controls">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0">Account Controls</h4>
+            <button class="btn btn-primary btn-sm" onclick="openControlsForm()"><i class="bi bi-plus-lg me-1"></i>Add Plan</button>
+        </div>
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr><th>Plan</th><th>Max Users</th><th>Max Servers</th><th>Users on Plan</th><th></th></tr></thead>
+                <tbody id="controls-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Runtime Settings -->
+    <div class="page" id="page-settings">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0">Runtime Settings</h4>
+            <button class="btn btn-primary btn-sm" onclick="openSettingsForm()"><i class="bi bi-plus-lg me-1"></i>Add Setting</button>
+        </div>
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr><th>Name</th><th>Value</th><th>Last Updated</th><th></th></tr></thead>
+                <tbody id="settings-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()"></div>
+<div class="modal-box" id="modal-box">
+    <div class="mh">
+        <h5 id="modal-title" class="mb-0"></h5>
+        <button class="btn-close" onclick="closeModal()"></button>
+    </div>
+    <div class="mb" id="modal-body"></div>
+</div>
+
+<script>
+const API = '/api';
+let currentPage = 'users';
+let editingId = null;
+let currentSftpServiceId = null;
+let currentSftpServiceName = null;
+let currentUserId = null;
+let currentUserName = null;
+let allUsers = [];
+let allControls = [];
+let allSftpServices = [];
+
+// ── Navigation ──
+document.querySelectorAll('.nav-link[data-page]').forEach(link => {
+    link.addEventListener('click', e => {
+        e.preventDefault();
+        const page = link.dataset.page;
+        if (page === 'sftp') { currentSftpServiceId = null; currentUserId = null; }
+        navigateTo(page);
+    });
+});
+
+function navigateTo(page) {
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    const activeLink = document.querySelector(`.nav-link[data-page="${page}"]`);
+    if (activeLink) activeLink.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    currentPage = page;
+    loadPage(page);
+}
+
+// ── Data loading ──
+function loadPage(page) {
+    if (page === 'users') loadUsers();
+    else if (page === 'sftp') loadSftpServices();
+    else if (page === 'accounts') loadAccounts();
+    else if (page === 'whitelist') loadWhitelist();
+    else if (page === 'controls') loadControls();
+    else if (page === 'settings') loadSettings();
+}
+
+function fmt(d) { return d ? new Date(d).toLocaleDateString() : '-'; }
+function empty(tbody, cols) {
+    document.getElementById(tbody).innerHTML = `<tr><td colspan="${cols}" class="text-center text-muted py-4">No records found</td></tr>`;
+}
+function actionBtns(editFn, delFn) {
+    return `<td class="text-end pe-3">
+        <button class="btn btn-sm btn-outline-secondary me-1" onclick="${editFn}"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-outline-danger" onclick="${delFn}"><i class="bi bi-trash"></i></button>
+    </td>`;
+}
+
+async function loadUsers() {
+    const [users, controls] = await Promise.all([
+        fetch(`${API}/users`).then(r=>r.json()).catch(()=>[]),
+        fetch(`${API}/accountcontrols`).then(r=>r.json()).catch(()=>[])
+    ]);
+    allUsers = users;
+    allControls = controls;
+    const tbody = document.getElementById('users-tbody');
+    if (!users.length) { empty('users-tbody', 7); return; }
+    tbody.innerHTML = users.map(u => `<tr>
+        <td>${u.firstName||''} ${u.surname||''}</td>
+        <td>${u.email||''}</td>
+        <td>${u.company||''}</td>
+        <td>${u.accountControls ? `<span class="badge bg-primary-subtle text-primary">${u.accountControls.plan}</span>` : '<span class="text-muted">—</span>'}</td>
+        <td>${u.country||'—'}</td>
+        <td><a href="#" class="text-decoration-none text-primary" onclick="drillSftpByUser(${u.id},'${(u.firstName||'')+' '+(u.surname||'')}')">
+            <i class="bi bi-hdd-network me-1"></i>View services</a></td>
+        ${actionBtns(`editUser(${u.id})`,`deleteUser(${u.id})`)}
+    </tr>`).join('');
+}
+
+async function loadSftpServices() {
+    let url = currentUserId ? `${API}/sftpservices/byuser/${currentUserId}` : `${API}/sftpservices`;
+    const services = await fetch(url).then(r=>r.json()).catch(()=>[]);
+    allSftpServices = await fetch(`${API}/sftpservices`).then(r=>r.json()).catch(()=>[]);
+
+    const breadcrumb = document.getElementById('sftp-breadcrumb');
+    if (currentUserId) {
+        breadcrumb.style.display = 'flex';
+        breadcrumb.innerHTML = `<a onclick="navigateTo('users')"><i class="bi bi-people me-1"></i>Users</a>
+            <span class="text-muted">/</span>
+            <span>${currentUserName}</span>
+            <span class="text-muted">/</span>
+            <span>SFTP Services</span>`;
+        document.getElementById('sftp-title').textContent = `SFTP Services — ${currentUserName}`;
+    } else {
+        breadcrumb.style.display = 'none';
+        document.getElementById('sftp-title').textContent = 'SFTP Services';
+    }
+
+    const tbody = document.getElementById('sftp-tbody');
+    if (!services.length) { empty('sftp-tbody', 7); return; }
+    tbody.innerHTML = services.map(s => `<tr>
+        <td><strong>${s.name||''}</strong></td>
+        <td><code>${s.host||''}</code></td>
+        <td>${s.user ? `${s.user.firstName} ${s.user.surname}` : '—'}</td>
+        <td><a href="#" class="text-decoration-none text-primary" onclick="drillAccounts(${s.id},'${s.name}')">
+            <i class="bi bi-person-badge me-1"></i>Accounts</a></td>
+        <td><a href="#" class="text-decoration-none text-primary" onclick="drillWhitelist(${s.id},'${s.name}')">
+            <i class="bi bi-shield-check me-1"></i>IP Rules</a></td>
+        <td>${fmt(s.creationDate)}</td>
+        ${actionBtns(`editSftp(${s.id})`,`deleteSftp(${s.id})`)}
+    </tr>`).join('');
+}
+
+async function loadAccounts() {
+    const url = currentSftpServiceId ? `${API}/sftpserviceaccounts/byservice/${currentSftpServiceId}` : `${API}/sftpserviceaccounts`;
+    const rows = await fetch(url).then(r=>r.json()).catch(()=>[]);
+    document.getElementById('accounts-breadcrumb').innerHTML = `
+        <a onclick="navigateTo('sftp')"><i class="bi bi-hdd-network me-1"></i>SFTP Services</a>
+        <span class="text-muted">/</span><span>${currentSftpServiceName||'All'}</span>
+        <span class="text-muted">/</span><span>Service Accounts</span>`;
+    document.getElementById('accounts-title').textContent = `Service Accounts — ${currentSftpServiceName||'All'}`;
+    const tbody = document.getElementById('accounts-tbody');
+    if (!rows.length) { empty('accounts-tbody', 4); return; }
+    tbody.innerHTML = rows.map(r => `<tr>
+        <td>${r.username||''}</td>
+        <td><span class="badge bg-secondary-subtle text-secondary">${r.authenticationType||''}</span></td>
+        <td><span class="${r.enabled?'badge-on':'badge-off'}">${r.enabled?'Enabled':'Disabled'}</span></td>
+        ${actionBtns(`editAccount(${r.id})`,`deleteAccount(${r.id})`)}
+    </tr>`).join('');
+}
+
+async function loadWhitelist() {
+    const url = currentSftpServiceId ? `${API}/sftpserviceipwhitelists/byservice/${currentSftpServiceId}` : `${API}/sftpserviceipwhitelists`;
+    const rows = await fetch(url).then(r=>r.json()).catch(()=>[]);
+    document.getElementById('whitelist-breadcrumb').innerHTML = `
+        <a onclick="navigateTo('sftp')"><i class="bi bi-hdd-network me-1"></i>SFTP Services</a>
+        <span class="text-muted">/</span><span>${currentSftpServiceName||'All'}</span>
+        <span class="text-muted">/</span><span>IP Whitelist</span>`;
+    document.getElementById('whitelist-title').textContent = `IP Whitelist — ${currentSftpServiceName||'All'}`;
+    const tbody = document.getElementById('whitelist-tbody');
+    if (!rows.length) { empty('whitelist-tbody', 3); return; }
+    tbody.innerHTML = rows.map(r => `<tr>
+        <td><code>${r.ipAddress||''}</code></td>
+        <td><span class="${r.enabled?'badge-on':'badge-off'}">${r.enabled?'Allowed':'Blocked'}</span></td>
+        ${actionBtns(`editWhitelist(${r.id})`,`deleteWhitelist(${r.id})`)}
+    </tr>`).join('');
+}
+
+async function loadControls() {
+    const [controls, users] = await Promise.all([
+        fetch(`${API}/accountcontrols`).then(r=>r.json()).catch(()=>[]),
+        fetch(`${API}/users`).then(r=>r.json()).catch(()=>[])
+    ]);
+    allControls = controls;
+    const tbody = document.getElementById('controls-tbody');
+    if (!controls.length) { empty('controls-tbody', 5); return; }
+    tbody.innerHTML = controls.map(c => {
+        const usersOnPlan = users.filter(u => u.accountControls && u.accountControls.id === c.id).length;
+        return `<tr>
+            <td><span class="badge bg-info-subtle text-info">${c.plan||''}</span></td>
+            <td>${c.maxUsers||'—'}</td>
+            <td>${c.maxServers||'—'}</td>
+            <td>${usersOnPlan}</td>
+            ${actionBtns(`editControls(${c.id})`,`deleteControls(${c.id})`)}
+        </tr>`;
+    }).join('');
+}
+
+async function loadSettings() {
+    const rows = await fetch(`${API}/runtimesettings`).then(r=>r.json()).catch(()=>[]);
+    const tbody = document.getElementById('settings-tbody');
+    if (!rows.length) { empty('settings-tbody', 4); return; }
+    tbody.innerHTML = rows.map(r => `<tr>
+        <td><code>${r.name||''}</code></td>
+        <td class="text-muted">${r.value||''}</td>
+        <td>${fmt(r.lastUpdatedDate)}</td>
+        ${actionBtns(`editSetting(${r.id})`,`deleteSetting(${r.id})`)}
+    </tr>`).join('');
+}
+
+// ── Drill-down navigation ──
+function drillSftpByUser(userId, userName) {
+    currentUserId = userId; currentUserName = userName; currentSftpServiceId = null;
+    navigateTo('sftp');
+}
+function drillAccounts(sftpId, sftpName) {
+    currentSftpServiceId = sftpId; currentSftpServiceName = sftpName;
+    navigateTo('accounts');
+}
+function drillWhitelist(sftpId, sftpName) {
+    currentSftpServiceId = sftpId; currentSftpServiceName = sftpName;
+    navigateTo('whitelist');
+}
+
+// ── Validation helpers ──
+const V = {
+    required: v => v && v.trim() ? null : 'This field is required',
+    email: v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? null : 'Invalid email address',
+    phone: v => !v || /^[\+]?[0-9\s\-\(\)]{7,20}$/.test(v) ? null : 'Invalid phone number',
+    postcode: v => !v || /^[0-9A-Za-z\s\-]{3,10}$/.test(v) ? null : 'Invalid postcode',
+    ip: v => !v || /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\/([0-9]|[1-2][0-9]|3[0-2]))?$/.test(v) ? null : 'Invalid IP address or CIDR (e.g. 192.168.1.0/24)',
+    ccNumber: v => {
+        if (!v) return null;
+        const n = v.replace(/\s/g,'');
+        if (!/^\d{13,19}$/.test(n)) return 'Invalid card number';
+        let sum = 0, alt = false;
+        for (let i = n.length-1; i >= 0; i--) {
+            let d = parseInt(n[i]);
+            if (alt) { d *= 2; if (d > 9) d -= 9; }
+            sum += d; alt = !alt;
+        }
+        return sum % 10 === 0 ? null : 'Invalid card number (Luhn check failed)';
+    },
+    ccExpiry: v => {
+        if (!v) return null;
+        if (!/^\d{2}\/\d{2}$/.test(v)) return 'Format must be MM/YY';
+        const [m,y] = v.split('/').map(Number);
+        if (m < 1 || m > 12) return 'Invalid month';
+        const exp = new Date(2000+y, m, 0);
+        return exp >= new Date() ? null : 'Card has expired';
+    },
+    password: v => {
+        if (!v) return null;
+        if (v.length < 8) return 'Minimum 8 characters';
+        if (!/[A-Z]/.test(v)) return 'Must contain an uppercase letter';
+        if (!/[0-9]/.test(v)) return 'Must contain a number';
+        if (!/[^A-Za-z0-9]/.test(v)) return 'Must contain a special character';
+        return null;
+    },
+    publicKey: v => !v || /^(ssh-rsa|ssh-ed25519|ecdsa-sha2|ssh-dss)\s/.test(v) ? null : 'Must start with ssh-rsa, ssh-ed25519, etc.'
+};
+
+function showError(fieldId, msg) {
+    const el = document.getElementById(fieldId);
+    if (!el) return;
+    el.classList.toggle('is-invalid', !!msg);
+    const err = document.getElementById(fieldId + '-err');
+    if (err) err.textContent = msg || '';
+}
+
+function validateForm(rules) {
+    let valid = true;
+    rules.forEach(([fieldId, ...validators]) => {
+        const el = document.getElementById(fieldId);
+        if (!el) return;
+        const val = el.type === 'checkbox' ? String(el.checked) : el.value;
+        for (const validator of validators) {
+            const err = validator(val);
+            showError(fieldId, err);
+            if (err) { valid = false; break; }
+        }
+    });
+    return valid;
+}
+
+function fld(label, id, type='text', placeholder='', required=false) {
+    return `<div class="col-md-6 mb-3">
+        <label class="form-label small fw-semibold">${label}${required?'<span class="text-danger ms-1">*</span>':''}</label>
+        <input class="form-control form-control-sm" type="${type}" id="${id}" placeholder="${placeholder}">
+        <div class="field-error" id="${id}-err"></div>
+    </div>`;
+}
+
+function pwStrength(pw) {
+    if (!pw) return [0,''];
+    let s = 0;
+    if (pw.length >= 8) s++;
+    if (/[A-Z]/.test(pw)) s++;
+    if (/[0-9]/.test(pw)) s++;
+    if (/[^A-Za-z0-9]/.test(pw)) s++;
+    const colors = ['#ef4444','#f97316','#eab308','#22c55e'];
+    const labels = ['Weak','Fair','Good','Strong'];
+    return [s, colors[s-1]||'#e5e7eb', labels[s-1]||''];
+}
+
+// ── Modal helpers ──
+function openModal(title, bodyHtml) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').innerHTML = bodyHtml;
+    document.getElementById('modal-overlay').style.display = 'block';
+    document.getElementById('modal-box').style.display = 'block';
+}
+function closeModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('modal-box').style.display = 'none';
+    editingId = null;
+}
+function setVal(id, val) { const el = document.getElementById(id); if (el) { if (el.type==='checkbox') el.checked=!!val; else el.value=val||''; } }
+function getVal(id) { const el = document.getElementById(id); return el ? (el.type==='checkbox' ? el.checked : el.value) : ''; }
+
+function footerBtns(saveFn) {
+    return `<div class="d-flex justify-content-end gap-2 mt-3 pt-2 border-top">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="${saveFn}()">Save</button>
+    </div>`;
+}
+
+// ── User form ──
+function openUserForm(data={}) {
+    editingId = data.id || null;
+    const controlOptions = allControls.map(c =>
+        `<option value="${c.id}" ${data.accountControls&&data.accountControls.id===c.id?'selected':''}>${c.plan}</option>`).join('');
+    openModal((editingId?'Edit':'New')+' User', `
+        <div class="section-header mb-3">Personal Details</div>
+        <div class="row">
+            ${fld('First Name','firstName','text','Jane',true)}
+            ${fld('Surname','surname','text','Smith',true)}
+            ${fld('Email','email','email','jane@company.com',true)}
+            ${fld('Phone','phone','tel','+61 400 000 000')}
+        </div>
+        <div class="section-header mb-3 mt-1">Company</div>
+        <div class="row">
+            ${fld('Company','company')}
+            ${fld('Company Size','companySize','text','e.g. 50-200')}
+            ${fld('Address Line 1','addressLine1')}
+            ${fld('Address Line 2','addressLine2')}
+            ${fld('State','state')}
+            ${fld('Postcode','postcode','text','e.g. 4000')}
+            ${fld('Country','country')}
+        </div>
+        <div class="section-header mb-3 mt-1">Plan</div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label small fw-semibold">Account Controls / Plan</label>
+                <select class="form-select form-select-sm" id="accountControlsId">
+                    <option value="">— No plan assigned —</option>${controlOptions}
+                </select>
+            </div>
+        </div>
+        <div class="section-header mb-3 mt-1">Primary Card</div>
+        <div class="row">
+            ${fld('Card Number','ccNumber','text','4111 1111 1111 1111')}
+            ${fld('Name on Card','ccName')}
+            ${fld('Expiry (MM/YY)','ccExpiry','text','12/27')}
+        </div>
+        <div class="section-header mb-3 mt-1">Backup Card</div>
+        <div class="row">
+            ${fld('Backup Card Number','backupCcNumber','text','4111 1111 1111 1111')}
+            ${fld('Backup Name on Card','backupCcName')}
+            ${fld('Backup Expiry (MM/YY)','backupCcExpiry','text','12/27')}
+        </div>
+        ${footerBtns('saveUser')}
+    `);
+    if (data.id) {
+        ['firstName','surname','email','phone','company','companySize',
+         'addressLine1','addressLine2','state','postcode','country',
+         'ccNumber','ccName','ccExpiry','backupCcNumber','backupCcName','backupCcExpiry'].forEach(f => setVal(f, data[f]));
+        if (data.accountControls) setVal('accountControlsId', data.accountControls.id);
+    }
+}
+
+async function saveUser() {
+    const valid = validateForm([
+        ['firstName', V.required],
+        ['surname', V.required],
+        ['email', V.required, V.email],
+        ['phone', V.phone],
+        ['postcode', V.postcode],
+        ['ccNumber', V.ccNumber],
+        ['ccExpiry', V.ccExpiry],
+        ['backupCcNumber', V.ccNumber],
+        ['backupCcExpiry', V.ccExpiry],
+    ]);
+    if (!valid) return;
+    const body = {};
+    ['firstName','surname','email','phone','company','companySize',
+     'addressLine1','addressLine2','state','postcode','country',
+     'ccNumber','ccName','ccExpiry','backupCcNumber','backupCcName','backupCcExpiry'].forEach(f => body[f] = getVal(f));
+    const acId = getVal('accountControlsId');
+    const acParam = acId && !isNaN(acId) && parseInt(acId) > 0 ? `?accountControlsId=${acId}` : '';
+    const url = editingId ? `${API}/users/${editingId}${acParam}` : `${API}/users${acParam}`;
+    const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if (r.ok) { closeModal(); loadUsers(); }
+    else {
+        const err = await r.json();
+        const msg = Object.entries(err).map(([k,v]) => `${k}: ${v}`).join('\n');
+        alert('Validation errors:\n' + (msg || JSON.stringify(err)));
+    }
+}
+
+async function editUser(id) {
+    const data = await fetch(`${API}/users/${id}`).then(r=>r.json());
+    openUserForm(data);
+}
+async function deleteUser(id) {
+    if (!confirm('Delete this user? Their SFTP services will also be removed.')) return;
+    await fetch(`${API}/users/${id}`, {method:'DELETE'});
+    loadUsers();
+}
+
+// ── SFTP Service form ──
+function openSftpForm(data={}) {
+    editingId = data.id || null;
+    const userOptions = allUsers.map(u =>
+        `<option value="${u.id}" ${data.user&&data.user.id===u.id?'selected':currentUserId===u.id?'selected':''}>${u.firstName} ${u.surname} (${u.email})</option>`).join('');
+    openModal((editingId?'Edit':'New')+' SFTP Service', `
+        <div class="row">
+            ${fld('Service Name','sftpName','text','My SFTP Server',true)}
+            ${fld('Host / Hostname','sftpHost','text','sftp.example.com',true)}
+            <div class="col-md-6 mb-3">
+                <label class="form-label small fw-semibold">Owner (User) <span class="text-danger">*</span></label>
+                <select class="form-select form-select-sm" id="sftpUserId">
+                    <option value="">— Select a user —</option>${userOptions}
+                </select>
+                <div class="field-error" id="sftpUserId-err"></div>
+            </div>
+        </div>
+        ${footerBtns('saveSftp')}
+    `);
+    if (data.id) { setVal('sftpName', data.name); setVal('sftpHost', data.host); }
+}
+
+async function saveSftp() {
+    const valid = validateForm([
+        ['sftpName', V.required],
+        ['sftpHost', V.required],
+        ['sftpUserId', V.required],
+    ]);
+    if (!valid) return;
+    const userId = getVal('sftpUserId');
+    const body = { name: getVal('sftpName'), host: getVal('sftpHost') };
+    const url = editingId ? `${API}/sftpservices/${editingId}?userId=${userId}` : `${API}/sftpservices?userId=${userId}`;
+    const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if (r.ok) { closeModal(); loadSftpServices(); }
+    else alert('Save failed');
+}
+
+async function editSftp(id) {
+    const data = await fetch(`${API}/sftpservices/${id}`).then(r=>r.json());
+    openSftpForm(data);
+}
+async function deleteSftp(id) {
+    if (!confirm('Delete this SFTP service? All associated accounts and IP rules will be removed.')) return;
+    await fetch(`${API}/sftpservices/${id}`, {method:'DELETE'});
+    loadSftpServices();
+}
+
+// ── Service Account form ──
+function openAccountForm(data={}) {
+    editingId = data.id || null;
+    const sftpOptions = allSftpServices.map(s =>
+        `<option value="${s.id}" ${data.sftpService&&data.sftpService.id===s.id?'selected':currentSftpServiceId===s.id?'selected':''}>${s.name} (${s.host})</option>`).join('');
+    openModal((editingId?'Edit':'New')+' Service Account', `
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label small fw-semibold">SFTP Service <span class="text-danger">*</span></label>
+                <select class="form-select form-select-sm" id="acctSftpId">
+                    <option value="">— Select service —</option>${sftpOptions}
+                </select>
+                <div class="field-error" id="acctSftpId-err"></div>
+            </div>
+            ${fld('Username','acctUsername','text','sftpuser',true)}
+            <div class="col-md-6 mb-3">
+                <label class="form-label small fw-semibold">Authentication Type <span class="text-danger">*</span></label>
+                <select class="form-select form-select-sm" id="acctAuthType" onchange="toggleAuthFields()">
+                    <option value="">— Select —</option>
+                    <option value="PASSWORD" ${data.authenticationType==='PASSWORD'?'selected':''}>Password</option>
+                    <option value="PUBLIC_KEY" ${data.authenticationType==='PUBLIC_KEY'?'selected':''}>Public Key</option>
+                </select>
+                <div class="field-error" id="acctAuthType-err"></div>
+            </div>
+        </div>
+        <div id="pw-section" style="display:none">
+            <div class="section-header mb-3">Password</div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label small fw-semibold">Password <span class="text-danger">*</span></label>
+                    <input class="form-control form-control-sm" type="password" id="acctPassword" oninput="updatePwStrength(this.value)">
+                    <div class="strength-bar mt-1" id="strength-bar" style="background:#e5e7eb;width:0%"></div>
+                    <div class="pw-hint" id="strength-label"></div>
+                    <div class="field-error" id="acctPassword-err"></div>
+                </div>
+            </div>
+        </div>
+        <div id="pk-section" style="display:none">
+            <div class="section-header mb-3">Public Key</div>
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">Public Key <span class="text-danger">*</span></label>
+                <textarea class="form-control form-control-sm" id="acctPublicKey" rows="4" placeholder="ssh-rsa AAAA... or ssh-ed25519 AAAA..."></textarea>
+                <div class="field-error" id="acctPublicKey-err"></div>
+            </div>
+        </div>
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="acctEnabled" checked>
+            <label class="form-check-label small">Enabled</label>
+        </div>
+        ${footerBtns('saveAccount')}
+    `);
+    if (data.id) {
+        setVal('acctUsername', data.username);
+        setVal('acctAuthType', data.authenticationType);
+        setVal('acctEnabled', data.enabled);
+        if (data.sftpService) setVal('acctSftpId', data.sftpService.id);
+        toggleAuthFields();
+        if (data.password) setVal('acctPassword', data.password);
+        if (data.publicKey) setVal('acctPublicKey', data.publicKey);
+    }
+}
+
+function toggleAuthFields() {
+    const type = getVal('acctAuthType');
+    document.getElementById('pw-section').style.display = type === 'PASSWORD' ? 'block' : 'none';
+    document.getElementById('pk-section').style.display = type === 'PUBLIC_KEY' ? 'block' : 'none';
+}
+
+function updatePwStrength(pw) {
+    const [score, color, label] = pwStrength(pw);
+    const bar = document.getElementById('strength-bar');
+    bar.style.width = (score * 25) + '%';
+    bar.style.background = color;
+    document.getElementById('strength-label').textContent = label;
+}
+
+async function saveAccount() {
+    const authType = getVal('acctAuthType');
+    const rules = [
+        ['acctSftpId', V.required],
+        ['acctUsername', V.required],
+        ['acctAuthType', V.required],
+    ];
+    if (authType === 'PASSWORD') rules.push(['acctPassword', V.required, V.password]);
+    if (authType === 'PUBLIC_KEY') rules.push(['acctPublicKey', V.required, V.publicKey]);
+    if (!validateForm(rules)) return;
+    const sftpId = getVal('acctSftpId');
+    const body = {
+        username: getVal('acctUsername'),
+        authenticationType: authType,
+        password: authType === 'PASSWORD' ? getVal('acctPassword') : null,
+        publicKey: authType === 'PUBLIC_KEY' ? getVal('acctPublicKey') : null,
+        enabled: document.getElementById('acctEnabled').checked
+    };
+    const url = editingId ? `${API}/sftpserviceaccounts/${editingId}?sftpServiceId=${sftpId}` : `${API}/sftpserviceaccounts?sftpServiceId=${sftpId}`;
+    const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if (r.ok) { closeModal(); loadAccounts(); }
+    else alert('Save failed');
+}
+
+async function editAccount(id) {
+    allSftpServices = await fetch(`${API}/sftpservices`).then(r=>r.json()).catch(()=>[]);
+    const data = await fetch(`${API}/sftpserviceaccounts/${id}`).then(r=>r.json());
+    openAccountForm(data);
+}
+async function deleteAccount(id) {
+    if (!confirm('Delete this service account?')) return;
+    await fetch(`${API}/sftpserviceaccounts/${id}`, {method:'DELETE'});
+    loadAccounts();
+}
+
+// ── IP Whitelist form ──
+function openWhitelistForm(data={}) {
+    editingId = data.id || null;
+    const sftpOptions = allSftpServices.map(s =>
+        `<option value="${s.id}" ${data.sftpService&&data.sftpService.id===s.id?'selected':currentSftpServiceId===s.id?'selected':''}>${s.name} (${s.host})</option>`).join('');
+    openModal((editingId?'Edit':'New')+' IP Whitelist Entry', `
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label small fw-semibold">SFTP Service <span class="text-danger">*</span></label>
+                <select class="form-select form-select-sm" id="wlSftpId">
+                    <option value="">— Select service —</option>${sftpOptions}
+                </select>
+                <div class="field-error" id="wlSftpId-err"></div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label small fw-semibold">IP Address / CIDR <span class="text-danger">*</span></label>
+                <input class="form-control form-control-sm" type="text" id="wlIp" placeholder="e.g. 192.168.1.0/24 or 10.0.0.1">
+                <div class="field-error" id="wlIp-err"></div>
+            </div>
+            <div class="col-12 mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="wlEnabled" checked>
+                    <label class="form-check-label small">Enabled</label>
+                </div>
+            </div>
+        </div>
+        ${footerBtns('saveWhitelist')}
+    `);
+    if (data.id) {
+        setVal('wlIp', data.ipAddress);
+        setVal('wlEnabled', data.enabled);
+        if (data.sftpService) setVal('wlSftpId', data.sftpService.id);
+    }
+}
+
+async function saveWhitelist() {
+    if (!validateForm([['wlSftpId', V.required], ['wlIp', V.required, V.ip]])) return;
+    const sftpId = getVal('wlSftpId');
+    const body = { ipAddress: getVal('wlIp'), enabled: document.getElementById('wlEnabled').checked };
+    const url = editingId ? `${API}/sftpserviceipwhitelists/${editingId}?sftpServiceId=${sftpId}` : `${API}/sftpserviceipwhitelists?sftpServiceId=${sftpId}`;
+    const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if (r.ok) { closeModal(); loadWhitelist(); }
+    else alert('Save failed');
+}
+
+async function editWhitelist(id) {
+    allSftpServices = await fetch(`${API}/sftpservices`).then(r=>r.json()).catch(()=>[]);
+    const data = await fetch(`${API}/sftpserviceipwhitelists/${id}`).then(r=>r.json());
+    openWhitelistForm(data);
+}
+async function deleteWhitelist(id) {
+    if (!confirm('Remove this IP rule?')) return;
+    await fetch(`${API}/sftpserviceipwhitelists/${id}`, {method:'DELETE'});
+    loadWhitelist();
+}
+
+// ── Account Controls form ──
+function openControlsForm(data={}) {
+    editingId = data.id || null;
+    openModal((editingId?'Edit':'New')+' Account Controls', `
+        <div class="row">
+            ${fld('Plan Name','ctrlPlan','text','e.g. Pro',true)}
+            ${fld('Max Users','ctrlMaxUsers','number','e.g. 50',true)}
+            ${fld('Max Servers','ctrlMaxServers','number','e.g. 10',true)}
+        </div>
+        ${footerBtns('saveControls')}
+    `);
+    if (data.id) { setVal('ctrlPlan', data.plan); setVal('ctrlMaxUsers', data.maxUsers); setVal('ctrlMaxServers', data.maxServers); }
+}
+
+async function saveControls() {
+    if (!validateForm([['ctrlPlan', V.required], ['ctrlMaxUsers', V.required], ['ctrlMaxServers', V.required]])) return;
+    const body = { plan: getVal('ctrlPlan'), maxUsers: parseInt(getVal('ctrlMaxUsers')), maxServers: parseInt(getVal('ctrlMaxServers')) };
+    const url = editingId ? `${API}/accountcontrols/${editingId}` : `${API}/accountcontrols`;
+    const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if (r.ok) { closeModal(); loadControls(); }
+    else alert('Save failed');
+}
+
+async function editControls(id) {
+    const data = await fetch(`${API}/accountcontrols/${id}`).then(r=>r.json());
+    openControlsForm(data);
+}
+async function deleteControls(id) {
+    if (!confirm('Delete this plan? Users assigned to it will lose their plan assignment.')) return;
+    await fetch(`${API}/accountcontrols/${id}`, {method:'DELETE'});
+    loadControls();
+}
+
+// ── Runtime Settings form ──
+function openSettingsForm(data={}) {
+    editingId = data.id || null;
+    openModal((editingId?'Edit':'New')+' Runtime Setting', `
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Name <span class="text-danger">*</span></label>
+            <input class="form-control form-control-sm" type="text" id="stgName" placeholder="e.g. MAX_CONNECTIONS">
+            <div class="field-error" id="stgName-err"></div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Value</label>
+            <textarea class="form-control form-control-sm" id="stgValue" rows="3"></textarea>
+        </div>
+        ${footerBtns('saveSetting')}
+    `);
+    if (data.id) { setVal('stgName', data.name); setVal('stgValue', data.value); }
+}
+
+async function saveSetting() {
+    if (!validateForm([['stgName', V.required]])) return;
+    const body = { name: getVal('stgName'), value: getVal('stgValue') };
+    const url = editingId ? `${API}/runtimesettings/${editingId}` : `${API}/runtimesettings`;
+    const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if (r.ok) { closeModal(); loadSettings(); }
+    else alert('Save failed');
+}
+
+async function editSetting(id) {
+    const data = await fetch(`${API}/runtimesettings/${id}`).then(r=>r.json());
+    openSettingsForm(data);
+}
+async function deleteSetting(id) {
+    if (!confirm('Delete this setting?')) return;
+    await fetch(`${API}/runtimesettings/${id}`, {method:'DELETE'});
+    loadSettings();
+}
+
+// ── Init ──
+async function init() {
+    try {
+        const [users, controls, services] = await Promise.all([
+            fetch(`${API}/users`).then(r => { if (!r.ok) throw new Error(`/api/users: ${r.status}`); return r.json(); }),
+            fetch(`${API}/accountcontrols`).then(r => { if (!r.ok) throw new Error(`/api/accountcontrols: ${r.status}`); return r.json(); }),
+            fetch(`${API}/sftpservices`).then(r => { if (!r.ok) throw new Error(`/api/sftpservices: ${r.status}`); return r.json(); })
+        ]);
+        allUsers = users; allControls = controls; allSftpServices = services;
+        loadUsers();
+    } catch (err) {
+        console.error('Init failed:', err);
+        document.getElementById('users-tbody').innerHTML =
+            `<tr><td colspan="7" class="text-center text-danger py-4">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Failed to load data: ${err.message}. Check that the server is running and the database is connected.
+            </td></tr>`;
+    }
+}
+init();
+</script>
+</body>
+</html>
