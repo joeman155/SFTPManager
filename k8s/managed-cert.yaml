@@ -1,0 +1,9 @@
+# Google Managed Certificate - free SSL, auto-renewed by Google
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: sftp-leederville-cert
+  namespace: sftp-manager
+spec:
+  domains:
+    - sftp.leederville.net
