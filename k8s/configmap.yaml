@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sftp-manager-config
+  namespace: sftp-manager
+data:
+  DB_PORT: "5432"
+  DB_NAME: "sftpmanager"
+  SERVER_PORT: "8080"
+  JPA_DDL_AUTO: "update"

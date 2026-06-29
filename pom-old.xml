@@ -55,12 +55,6 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- OAuth2 / Google Sign-In -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-oauth2-client</artifactId>
-        </dependency>
-
         <!-- Tomcat (provided for WAR deployment) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

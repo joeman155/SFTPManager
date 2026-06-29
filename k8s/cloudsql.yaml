@@ -1,0 +1,29 @@
+# Optional: Cloud SQL Auth Proxy sidecar
+# Use this if your PostgreSQL is on Google Cloud SQL
+# If using an external DB, delete this file and set DB_HOST in the secret directly
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sftp-manager
+  namespace: sftp-manager
+spec:
+  template:
+    spec:
+      containers:
+        # Add this sidecar container alongside the main app container
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.0.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "YOUR_PROJECT_ID:YOUR_REGION:YOUR_INSTANCE_NAME"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

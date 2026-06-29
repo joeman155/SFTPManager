@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>SFTP Manager — My Services</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet"/>
+    <style>
+        body { background:#f8f9fa; }
+        .topbar { background:#1a1f36; color:#fff; padding:14px 28px; display:flex; justify-content:space-between; align-items:center; }
+        .topbar .brand { font-weight:700; font-size:1.1rem; }
+        .topbar .user-info { display:flex; align-items:center; gap:10px; font-size:.9rem; }
+        .topbar .avatar { width:32px; height:32px; border-radius:50%; border:2px solid #4f46e5; }
+        .topbar .logout-btn { color:#a0aec0; text-decoration:none; font-size:.85rem; margin-left:12px; }
+        .topbar .logout-btn:hover { color:#fff; }
+        .main { max-width:900px; margin:36px auto; padding:0 20px; }
+        .service-card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:20px 24px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; transition:box-shadow .2s; }
+        .service-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.12); }
+        .service-icon { width:42px; height:42px; background:#ede9fe; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#4f46e5; font-size:1.2rem; margin-right:16px; flex-shrink:0; }
+        .service-info h6 { margin:0 0 3px; font-weight:600; }
+        .service-info code { font-size:.85rem; color:#6b7280; }
+        .empty-state { text-align:center; padding:50px 20px; color:#6b7280; }
+        .empty-state i { font-size:2.8rem; color:#d1d5db; margin-bottom:14px; }
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1040; display:none; }
+        .modal-box { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:12px; z-index:1050; width:520px; max-width:95vw; box-shadow:0 8px 32px rgba(0,0,0,0.18); display:none; }
+        .modal-box .mh { padding:16px 20px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; }
+        .modal-box .mb { padding:20px; }
+        .field-error { color:#dc2626; font-size:.8rem; margin-top:3px; }
+        .form-control.is-invalid { border-color:#dc2626; }
+        .badge-on  { background:#d1fae5; color:#065f46; padding:2px 9px; border-radius:20px; font-size:.78rem; }
+        .badge-off { background:#fee2e2; color:#991b1b; padding:2px 9px; border-radius:20px; font-size:.78rem; }
+        .section-tabs { display:flex; gap:4px; margin-bottom:24px; background:#fff; border-radius:10px; padding:6px; box-shadow:0 1px 4px rgba(0,0,0,0.07); }
+        .section-tabs .tab { flex:1; text-align:center; padding:8px; border-radius:7px; cursor:pointer; font-size:.9rem; color:#6b7280; font-weight:500; border:none; background:none; }
+        .section-tabs .tab.active { background:#4f46e5; color:#fff; }
+        .section-panel { display:none; }
+        .section-panel.active { display:block; }
+        .account-card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.07); padding:16px 20px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
+        .strength-bar { height:5px; border-radius:3px; margin-top:5px; transition:all .3s; }
+        .pw-hint { font-size:.75rem; color:#6b7280; margin-top:3px; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand"><i class="bi bi-cloud-arrow-up me-2"></i>SFTP Manager</div>
+    <div class="user-info">
+        <img id="user-avatar" class="avatar" src="" alt="" style="display:none"/>
+        <span id="user-name"></span>
+        <a href="/portal/logout" class="logout-btn"><i class="bi bi-box-arrow-right me-1"></i>Sign out</a>
+    </div>
+</div>
+
+<div class="main">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0">My SFTP Services</h4>
+            <p class="text-muted small mb-0">Manage your SFTP connections</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openCreateService()">
+            <i class="bi bi-plus-lg me-1"></i>New SFTP Service
+        </button>
+    </div>
+
+    <div id="services-list">
+        <div class="text-center py-4 text-muted"><i class="bi bi-arrow-clockwise"></i> Loading...</div>
+    </div>
+
+</div>
+
+<!-- Service Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()"></div>
+<div class="modal-box" id="modal-box">
+    <div class="mh">
+        <h5 id="modal-title" class="mb-0"></h5>
+        <button class="btn-close" onclick="closeModal()"></button>
+    </div>
+    <div class="mb" id="modal-body"></div>
+</div>
+
+<!-- Accounts/Whitelist sub-modal -->
+<div class="modal-overlay" id="sub-overlay" onclick="closeSubModal()"></div>
+<div class="modal-box" id="sub-box" style="width:600px">
+    <div class="mh">
+        <h5 id="sub-title" class="mb-0"></h5>
+        <button class="btn-close" onclick="closeSubModal()"></button>
+    </div>
+    <div class="mb" id="sub-body"></div>
+</div>
+
+<script>
+let myUserId = null;
+let editingSvcId = null;
+let editingAcctId = null;
+let editingIpId = null;
+let currentSvcId = null;
+
+// ── Validation ──
+const V = {
+    required: v => v && v.trim() ? null : 'This field is required',
+    ip: v => !v || /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\/([0-9]|[1-2][0-9]|3[0-2]))?$/.test(v) ? null : 'Invalid IP or CIDR (e.g. 192.168.1.0/24)',
+    password: v => {
+        if (!v) return null;
+        if (v.length < 8) return 'Minimum 8 characters';
+        if (!/[A-Z]/.test(v)) return 'Must contain an uppercase letter';
+        if (!/[0-9]/.test(v)) return 'Must contain a number';
+        if (!/[^A-Za-z0-9]/.test(v)) return 'Must contain a special character';
+        return null;
+    },
+    publicKey: v => !v || /^(ssh-rsa|ssh-ed25519|ecdsa-sha2|ssh-dss)\s/.test(v) ? null : 'Must start with ssh-rsa, ssh-ed25519, etc.'
+};
+
+function showErr(id, msg) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('is-invalid', !!msg);
+    const e = document.getElementById(id+'-err');
+    if (e) e.textContent = msg||'';
+}
+
+function validate(rules) {
+    let ok = true;
+    rules.forEach(([id, ...validators]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const val = el.type==='checkbox' ? String(el.checked) : el.value;
+        for (const fn of validators) {
+            const err = fn(val);
+            showErr(id, err);
+            if (err) { ok = false; break; }
+        }
+    });
+    return ok;
+}
+
+function getVal(id) { const el=document.getElementById(id); return el?(el.type==='checkbox'?el.checked:el.value):''; }
+function setVal(id, v) { const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!v; else el.value=v||''; } }
+
+function fld(label, id, type='text', placeholder='', required=false) {
+    return `<div class="mb-3">
+        <label class="form-label small fw-semibold">${label}${required?'<span class="text-danger ms-1">*</span>':''}</label>
+        <input class="form-control form-control-sm" type="${type}" id="${id}" placeholder="${placeholder}">
+        <div class="field-error" id="${id}-err"></div>
+    </div>`;
+}
+
+// ── Main modal ──
+function openModal(title, html) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal-overlay').style.display='block';
+    document.getElementById('modal-box').style.display='block';
+}
+function closeModal() {
+    document.getElementById('modal-overlay').style.display='none';
+    document.getElementById('modal-box').style.display='none';
+    editingSvcId=null;
+}
+
+// ── Sub modal ──
+function openSubModal(title, html) {
+    document.getElementById('sub-title').textContent = title;
+    document.getElementById('sub-body').innerHTML = html;
+    document.getElementById('sub-overlay').style.display='block';
+    document.getElementById('sub-box').style.display='block';
+}
+function closeSubModal() {
+    document.getElementById('sub-overlay').style.display='none';
+    document.getElementById('sub-box').style.display='none';
+    editingAcctId=null; editingIpId=null;
+}
+
+// ── Load services ──
+async function loadServices() {
+    const res = await fetch('/portal/api/services');
+    const data = await res.json();
+    const container = document.getElementById('services-list');
+
+    if (!data.services || data.services.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="bi bi-hdd-network d-block"></i>
+                <h6>No SFTP services yet</h6>
+                <p>Click <strong>New SFTP Service</strong> to create your first connection.</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = data.services.map(s => `
+        <div class="service-card">
+            <div class="d-flex align-items-center">
+                <div class="service-icon"><i class="bi bi-hdd-network"></i></div>
+                <div class="service-info">
+                    <h6>${s.name}</h6>
+                    <code>${s.host}</code>
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap justify-content-end">
+                <button class="btn btn-sm btn-outline-secondary" onclick="copyHost('${s.host}')">
+                    <i class="bi bi-clipboard me-1"></i>Copy host
+                </button>
+                <button class="btn btn-sm btn-outline-primary" onclick="manageAccounts(${s.id},'${s.name}')">
+                    <i class="bi bi-person-badge me-1"></i>Accounts
+                </button>
+                <button class="btn btn-sm btn-outline-primary" onclick="manageWhitelist(${s.id},'${s.name}')">
+                    <i class="bi bi-shield-check me-1"></i>IP Rules
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="editService(${s.id},'${s.name}','${s.host}')">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteService(${s.id})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ── Create / Edit Service ──
+function openCreateService() {
+    editingSvcId = null;
+    openModal('New SFTP Service', `
+        ${fld('Service Name','svcName','text','My SFTP Server',true)}
+        ${fld('Host / Hostname','svcHost','text','sftp.example.com',true)}
+        <div class="d-flex justify-content-end gap-2 mt-3">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="saveService()">Save</button>
+        </div>
+    `);
+}
+
+function editService(id, name, host) {
+    editingSvcId = id;
+    openModal('Edit SFTP Service', `
+        ${fld('Service Name','svcName','text','',true)}
+        ${fld('Host / Hostname','svcHost','text','',true)}
+        <div class="d-flex justify-content-end gap-2 mt-3">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="saveService()">Save</button>
+        </div>
+    `);
+    setVal('svcName', name);
+    setVal('svcHost', host);
+}
+
+async function saveService() {
+    if (!validate([['svcName', V.required], ['svcHost', V.required]])) return;
+    const body = { name: getVal('svcName'), host: getVal('svcHost') };
+    const url = editingSvcId
+        ? `/portal/api/services/${editingSvcId}`
+        : `/portal/api/services`;
+    const r = await fetch(url, { method: editingSvcId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { closeModal(); loadServices(); }
+    else { const e = await r.json(); alert(e.error || 'Save failed'); }
+}
+
+async function deleteService(id) {
+    if (!confirm('Delete this SFTP service and all its accounts and IP rules?')) return;
+    await fetch(`/portal/api/services/${id}`, { method:'DELETE' });
+    loadServices();
+}
+
+function copyHost(host) {
+    navigator.clipboard.writeText(host).then(() => alert('Copied: ' + host));
+}
+
+// ── Service Accounts ──
+async function manageAccounts(svcId, svcName) {
+    currentSvcId = svcId;
+    const rows = await fetch(`/portal/api/services/${svcId}/accounts`).then(r=>r.json()).catch(()=>[]);
+    renderAccountsModal(svcName, rows);
+}
+
+function renderAccountsModal(svcName, rows) {
+    const list = rows.length ? rows.map(a => `
+        <div class="account-card">
+            <div>
+                <strong>${a.username}</strong>
+                <span class="badge bg-secondary-subtle text-secondary ms-2">${a.authenticationType||''}</span>
+                <span class="ms-2 ${a.enabled?'badge-on':'badge-off'}">${a.enabled?'Enabled':'Disabled'}</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="editAccount(${a.id})"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${a.id})"><i class="bi bi-trash"></i></button>
+            </div>
+        </div>`).join('')
+    : '<p class="text-muted text-center py-3">No accounts yet</p>';
+
+    openSubModal(`Service Accounts — ${svcName}`, `
+        <div class="d-flex justify-content-end mb-3">
+            <button class="btn btn-primary btn-sm" onclick="openAccountForm()"><i class="bi bi-plus-lg me-1"></i>Add Account</button>
+        </div>
+        <div id="accounts-list">${list}</div>
+    `);
+}
+
+function openAccountForm(data={}) {
+    editingAcctId = data.id || null;
+    const html = `
+        ${fld('Username','acctUser','text','sftpuser',true)}
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Auth Type <span class="text-danger">*</span></label>
+            <select class="form-select form-select-sm" id="acctAuth" onchange="toggleAuth()">
+                <option value="">— Select —</option>
+                <option value="PASSWORD" ${data.authenticationType==='PASSWORD'?'selected':''}>Password</option>
+                <option value="PUBLIC_KEY" ${data.authenticationType==='PUBLIC_KEY'?'selected':''}>Public Key</option>
+            </select>
+            <div class="field-error" id="acctAuth-err"></div>
+        </div>
+        <div id="pw-sec" style="display:none">
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">Password <span class="text-danger">*</span></label>
+                <input class="form-control form-control-sm" type="password" id="acctPw" oninput="updateStrength(this.value)">
+                <div class="strength-bar" id="str-bar" style="background:#e5e7eb;width:0%"></div>
+                <div class="pw-hint" id="str-label"></div>
+                <div class="field-error" id="acctPw-err"></div>
+            </div>
+        </div>
+        <div id="pk-sec" style="display:none">
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">Public Key <span class="text-danger">*</span></label>
+                <textarea class="form-control form-control-sm" id="acctPk" rows="3" placeholder="ssh-rsa AAAA..."></textarea>
+                <div class="field-error" id="acctPk-err"></div>
+            </div>
+        </div>
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="acctEnabled" checked>
+            <label class="form-check-label small">Enabled</label>
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+            <button class="btn btn-secondary btn-sm" onclick="backToAccounts()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="saveAccount()">Save</button>
+        </div>`;
+
+    openSubModal((editingAcctId?'Edit':'New')+' Service Account', html);
+    if (data.id) {
+        setVal('acctUser', data.username);
+        setVal('acctAuth', data.authenticationType);
+        setVal('acctEnabled', data.enabled);
+        toggleAuth();
+        if (data.password) setVal('acctPw', data.password);
+        if (data.publicKey) setVal('acctPk', data.publicKey);
+    }
+}
+
+function toggleAuth() {
+    const t = getVal('acctAuth');
+    document.getElementById('pw-sec').style.display = t==='PASSWORD'?'block':'none';
+    document.getElementById('pk-sec').style.display = t==='PUBLIC_KEY'?'block':'none';
+}
+
+function updateStrength(pw) {
+    let s=0;
+    if(pw.length>=8)s++; if(/[A-Z]/.test(pw))s++; if(/[0-9]/.test(pw))s++; if(/[^A-Za-z0-9]/.test(pw))s++;
+    const colors=['#ef4444','#f97316','#eab308','#22c55e'];
+    const labels=['Weak','Fair','Good','Strong'];
+    const bar=document.getElementById('str-bar');
+    bar.style.width=(s*25)+'%'; bar.style.background=colors[s-1]||'#e5e7eb';
+    document.getElementById('str-label').textContent=labels[s-1]||'';
+}
+
+async function saveAccount() {
+    const authType = getVal('acctAuth');
+    const rules = [['acctUser',V.required],['acctAuth',V.required]];
+    if (authType==='PASSWORD') rules.push(['acctPw',V.required,V.password]);
+    if (authType==='PUBLIC_KEY') rules.push(['acctPk',V.required,V.publicKey]);
+    if (!validate(rules)) return;
+    const body = {
+        username: getVal('acctUser'),
+        authenticationType: authType,
+        password: authType==='PASSWORD' ? getVal('acctPw') : null,
+        publicKey: authType==='PUBLIC_KEY' ? getVal('acctPk') : null,
+        enabled: document.getElementById('acctEnabled').checked
+    };
+    const url = editingAcctId
+        ? `/portal/api/services/${currentSvcId}/accounts/${editingAcctId}`
+        : `/portal/api/services/${currentSvcId}/accounts`;
+    const r = await fetch(url, {method:editingAcctId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if (r.ok) { backToAccounts(); }
+    else alert('Save failed');
+}
+
+async function editAccount(id) {
+    const data = await fetch(`/portal/api/accounts/${id}`).then(r=>r.json());
+    openAccountForm(data);
+}
+
+async function deleteAccount(id) {
+    if (!confirm('Delete this account?')) return;
+    await fetch(`/portal/api/accounts/${id}`, {method:'DELETE'});
+    const rows = await fetch(`/portal/api/services/${currentSvcId}/accounts`).then(r=>r.json()).catch(()=>[]);
+    document.getElementById('accounts-list').innerHTML = rows.length ? rows.map(a => `
+        <div class="account-card">
+            <div><strong>${a.username}</strong>
+                <span class="badge bg-secondary-subtle text-secondary ms-2">${a.authenticationType||''}</span>
+                <span class="ms-2 ${a.enabled?'badge-on':'badge-off'}">${a.enabled?'Enabled':'Disabled'}</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="editAccount(${a.id})"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${a.id})"><i class="bi bi-trash"></i></button>
+            </div>
+        </div>`).join('') : '<p class="text-muted text-center py-3">No accounts yet</p>';
+}
+
+async function backToAccounts() {
+    const rows = await fetch(`/portal/api/services/${currentSvcId}/accounts`).then(r=>r.json()).catch(()=>[]);
+    const svcName = document.getElementById('sub-title').textContent.replace('Service Accounts — ','');
+    renderAccountsModal(svcName, rows);
+}
+
+// ── IP Whitelist ──
+async function manageWhitelist(svcId, svcName) {
+    currentSvcId = svcId;
+    const rows = await fetch(`/portal/api/services/${svcId}/whitelist`).then(r=>r.json()).catch(()=>[]);
+    renderWhitelistModal(svcName, rows);
+}
+
+function renderWhitelistModal(svcName, rows) {
+    const list = rows.length ? rows.map(r => `
+        <div class="account-card">
+            <div><code>${r.ipAddress}</code>
+                <span class="ms-2 ${r.enabled?'badge-on':'badge-off'}">${r.enabled?'Allowed':'Blocked'}</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="editIp(${r.id})"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteIp(${r.id})"><i class="bi bi-trash"></i></button>
+            </div>
+        </div>`).join('')
+    : '<p class="text-muted text-center py-3">No IP rules yet</p>';
+
+    openSubModal(`IP Whitelist — ${svcName}`, `
+        <div class="d-flex justify-content-end mb-3">
+            <button class="btn btn-primary btn-sm" onclick="openIpForm()"><i class="bi bi-plus-lg me-1"></i>Add IP Rule</button>
+        </div>
+        <div id="ip-list">${list}</div>
+    `);
+}
+
+function openIpForm(data={}) {
+    editingIpId = data.id || null;
+    openSubModal((editingIpId?'Edit':'New')+' IP Rule', `
+        ${fld('IP Address / CIDR','ipAddr','text','e.g. 192.168.1.0/24 or 10.0.0.1',true)}
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="ipEnabled" checked>
+            <label class="form-check-label small">Enabled</label>
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+            <button class="btn btn-secondary btn-sm" onclick="backToWhitelist()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="saveIp()">Save</button>
+        </div>
+    `);
+    if (data.id) { setVal('ipAddr', data.ipAddress); setVal('ipEnabled', data.enabled); }
+}
+
+async function saveIp() {
+    if (!validate([['ipAddr', V.required, V.ip]])) return;
+    const body = { ipAddress: getVal('ipAddr'), enabled: document.getElementById('ipEnabled').checked };
+    const url = editingIpId
+        ? `/portal/api/services/${currentSvcId}/whitelist/${editingIpId}`
+        : `/portal/api/services/${currentSvcId}/whitelist`;
+    const r = await fetch(url, {method:editingIpId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if (r.ok) { backToWhitelist(); }
+    else alert('Save failed');
+}
+
+async function editIp(id) {
+    const data = await fetch(`/portal/api/whitelist/${id}`).then(r=>r.json());
+    openIpForm(data);
+}
+
+async function deleteIp(id) {
+    if (!confirm('Remove this IP rule?')) return;
+    await fetch(`/portal/api/whitelist/${id}`, {method:'DELETE'});
+    backToWhitelist();
+}
+
+async function backToWhitelist() {
+    const rows = await fetch(`/portal/api/services/${currentSvcId}/whitelist`).then(r=>r.json()).catch(()=>[]);
+    const svcName = document.getElementById('sub-title').textContent.replace('IP Whitelist — ','');
+    renderWhitelistModal(svcName, rows);
+}
+
+// ── Init ──
+async function init() {
+    const res = await fetch('/portal/api/me');
+    if (res.status === 401) { window.location.href = '/portal/login'; return; }
+    const me = await res.json();
+    myUserId = me.userId;
+    document.getElementById('user-name').textContent = me.name || me.email;
+    if (me.picture) {
+        const av = document.getElementById('user-avatar');
+        av.src = me.picture; av.style.display = 'block';
+    }
+    loadServices();
+}
+
+init();
+</script>
+</body>
+</html>
