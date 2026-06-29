@@ -6,7 +6,7 @@
 set -e
 
 # ── CONFIGURE THESE ──────────────────────────────────────────────
-PROJECT_ID="your-gcp-project-id"
+PROJECT_ID="sftpmanager"
 REGION="australia-southeast1"          # closest GCP region to Perth/Leederville
 CLUSTER_NAME="sftp-manager-cluster"
 ARTIFACT_REPO="sftp-manager"
