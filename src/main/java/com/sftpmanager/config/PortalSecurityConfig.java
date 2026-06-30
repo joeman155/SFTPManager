@@ -10,15 +10,23 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 @Configuration
 public class PortalSecurityConfig {
 
+    // Matches only the portal's own OAuth2 callback (google-portal),
+    // not the admin's (google-admin) — this is what fixes the cross-routing bug
     @Bean
     @Order(1)
     public SecurityFilterChain portalFilterChain(HttpSecurity http) throws Exception {
         http
-            .securityMatcher("/portal/**", "/oauth2/**", "/login/oauth2/**", "/portal-login.html", "/portal.html")
+            .securityMatcher(
+                "/portal/**",
+                "/portal-login.html",
+                "/portal.html",
+                "/oauth2/authorization/google-portal",
+                "/login/oauth2/code/google-portal"
+            )
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/portal/login", "/portal-login.html").permitAll()
-                .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                .requestMatchers("/oauth2/authorization/google-portal", "/login/oauth2/code/google-portal").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth -> oauth

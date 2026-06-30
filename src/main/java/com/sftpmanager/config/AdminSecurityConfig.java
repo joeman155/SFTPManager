@@ -13,7 +13,6 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
 
 @Configuration
 public class AdminSecurityConfig {
@@ -24,15 +23,22 @@ public class AdminSecurityConfig {
         this.userRepository = userRepository;
     }
 
+    // Matches only the admin's own OAuth2 callback (google-admin),
+    // plus the admin pages and API routes
     @Bean
     @Order(2)
     public SecurityFilterChain adminFilterChain(HttpSecurity http) throws Exception {
         http
-            .securityMatcher("/", "/index.html", "/api/**", "/admin/**", "/admin-login.html", "/admin-denied.html")
+            .securityMatcher(
+                "/", "/index.html", "/api/**", "/admin/**",
+                "/admin-login.html", "/admin-denied.html",
+                "/oauth2/authorization/google-admin",
+                "/login/oauth2/code/google-admin"
+            )
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/admin-login.html", "/admin-denied.html").permitAll()
-                .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                .requestMatchers("/oauth2/authorization/google-admin", "/login/oauth2/code/google-admin").permitAll()
                 .requestMatchers("/healthz").permitAll()
                 .anyRequest().authenticated()
             )
