@@ -33,6 +33,7 @@ public class AdminSecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/admin-login.html", "/admin-denied.html").permitAll()
                 .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                .requestMatchers("/healthz").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth -> oauth
