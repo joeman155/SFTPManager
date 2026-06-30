@@ -69,6 +69,10 @@ public class User {
     @Column(name = "backup_cc_expiry")
     private String backupCcExpiry;
 
+    // Role: 10 = admin, 1 = standard user
+    @Column(name = "role", nullable = false)
+    private Integer role = 1;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "account_controls_id")
     private AccountControls accountControls;
@@ -129,6 +133,8 @@ public class User {
     public void setBackupCcName(String v) { this.backupCcName = v; }
     public String getBackupCcExpiry() { return backupCcExpiry; }
     public void setBackupCcExpiry(String v) { this.backupCcExpiry = v; }
+    public Integer getRole() { return role; }
+    public void setRole(Integer v) { this.role = v; }
     public AccountControls getAccountControls() { return accountControls; }
     public void setAccountControls(AccountControls v) { this.accountControls = v; }
     public LocalDateTime getCreationDate() { return creationDate; }

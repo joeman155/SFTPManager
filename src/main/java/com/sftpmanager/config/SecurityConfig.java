@@ -11,17 +11,14 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // Order(2) = runs after PortalSecurityConfig (Order 1)
-    // Only handles non-portal routes
+    // Order(3) = catch-all for any remaining routes (static assets etc.)
     @Bean
-    @Order(2)
+    @Order(3)
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .securityMatcher("/api/**", "/", "/index.html", "/static/**")
+            .securityMatcher("/**")
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/**").permitAll()
-                .requestMatchers("/", "/index.html", "/static/**", "/*.js", "/*.css").permitAll()
                 .anyRequest().permitAll()
             );
         return http.build();
