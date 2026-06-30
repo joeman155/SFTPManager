@@ -1,9 +1,11 @@
-# NodePort required for GKE HTTP(S) Load Balancer (not ClusterIP)
 apiVersion: v1
 kind: Service
 metadata:
   name: sftp-manager-service
   namespace: sftp-manager
+  annotations:
+    cloud.google.com/backend-config: '{"default": "sftp-manager-backend-config"}'
+    cloud.google.com/neg: '{"ingress": true}'
 spec:
   selector:
     app: sftp-manager
@@ -12,4 +14,3 @@ spec:
       port: 80
       targetPort: 8080
   type: NodePort
-

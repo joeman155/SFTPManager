@@ -63,6 +63,8 @@ kubectl apply -f k8s/service.yaml
 kubectl apply -f k8s/managed-cert.yaml
 kubectl apply -f k8s/ingress.yaml
 
+kubectl apply -f k8s/iap-backend-config.yaml
+
 echo "       Waiting for rollout..."
 kubectl rollout status deployment/sftp-manager -n sftp-manager --timeout=120s
 

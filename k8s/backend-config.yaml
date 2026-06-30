@@ -1,0 +1,16 @@
+# BackendConfig - just sets the load balancer health check path
+# (IAP removed - using in-app Google login via AdminSecurityConfig instead)
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: sftp-manager-backend-config
+  namespace: sftp-manager
+spec:
+  healthCheck:
+    checkIntervalSec: 30
+    timeoutSec: 5
+    healthyThreshold: 1
+    unhealthyThreshold: 2
+    type: HTTP
+    requestPath: /healthz
+    port: 8080

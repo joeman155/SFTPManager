@@ -65,14 +65,14 @@ spec:
               value: "email,profile"
           readinessProbe:
             httpGet:
-              path: /api/users
+              path: /healthz
               port: 8080
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /api/users
+              path: /healthz
               port: 8080
             initialDelaySeconds: 60
             periodSeconds: 30
