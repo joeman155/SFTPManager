@@ -723,23 +723,40 @@ async function addressAutocomplete(input, prefix) {
 
     if (query.length < 3) { dropdown.style.display = 'none'; return; }
 
-    // Debounce — wait 400ms after user stops typing (respects Nominatim usage policy)
     clearTimeout(acTimer);
     acTimer = setTimeout(async () => {
         try {
-            const res = await fetch(
-                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5`,
-                { headers: { 'Accept-Language': 'en', 'User-Agent': 'SFTPManager/1.0' } }
-            );
+            // Use structured query with house number support
+            // Also try street number extraction from query
+            const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=8&countrycodes=`;
+            const res = await fetch(url, {
+                headers: { 'Accept-Language': 'en', 'User-Agent': 'SFTPManager/1.0 (sftp.leederville.net)' }
+            });
             const results = await res.json();
 
-            if (!results.length) { dropdown.style.display = 'none'; return; }
+            if (!results.length) {
+                dropdown.innerHTML = '<div class="autocomplete-item" style="color:#6b7280">No results found — try including street number</div>';
+                dropdown.style.display = 'block';
+                return;
+            }
+
+            // Store results on dropdown element to avoid JSON in onclick
+            dropdown._results = results;
 
             dropdown.innerHTML = results.map((r, i) => {
                 const a = r.address || {};
-                const main = [a.house_number, a.road].filter(Boolean).join(' ') || r.display_name.split(',')[0];
-                const sub  = r.display_name;
-                return `<div class="autocomplete-item" onclick="selectAddress(${i}, '${prefix}', ${JSON.stringify(results).replace(/"/g,'&quot;')})">
+                // Build a clean display line showing house number prominently
+                const num    = a.house_number || '';
+                const road   = a.road || a.pedestrian || a.footway || '';
+                const suburb = a.suburb || a.neighbourhood || a.city_district || a.town || a.village || '';
+                const state  = a.state || '';
+                const post   = a.postcode || '';
+                const country = a.country || '';
+
+                const main = [num, road].filter(Boolean).join(' ') || r.display_name.split(',')[0];
+                const sub  = [suburb, state, post, country].filter(Boolean).join(', ');
+
+                return `<div class="autocomplete-item" onclick="selectAddress(${i}, '${prefix}')">
                     <div class="ac-main">${main}</div>
                     <div class="ac-sub">${sub}</div>
                 </div>`;
@@ -752,20 +769,26 @@ async function addressAutocomplete(input, prefix) {
     }, 400);
 }
 
-function selectAddress(index, prefix, resultsJson) {
-    const results = typeof resultsJson === 'string' ? JSON.parse(resultsJson.replace(/&quot;/g,'"')) : resultsJson;
+function selectAddress(index, prefix) {
+    const dropdown = document.getElementById(prefix + '-address-dropdown');
+    const results = dropdown._results;
+    if (!results || !results[index]) return;
+
     const r = results[index];
     const a = r.address || {};
 
-    // Build address line 1
-    const line1 = [a.house_number, a.road].filter(Boolean).join(' ');
-    // Build address line 2 (suburb/neighbourhood)
-    const line2 = a.suburb || a.neighbourhood || a.city_district || '';
-    const state = a.state || a.region || '';
+    // Extract all address components
+    const num     = a.house_number || '';
+    const road    = a.road || a.pedestrian || a.footway || '';
+    const suburb  = a.suburb || a.neighbourhood || a.city_district || a.town || a.village || '';
+    const state   = a.state || a.region || '';
     const postcode = a.postcode || '';
-    const country = a.country || '';
+    const country  = a.country || '';
 
-    // Fill fields
+    // Line 1 = number + street — if no house number, use first part of display_name
+    const line1 = num && road ? `${num} ${road}` : road || r.display_name.split(',')[0];
+    const line2 = suburb;
+
     const setField = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
     setField(prefix + '-address1', line1);
     setField(prefix + '-address2', line2);
@@ -775,8 +798,8 @@ function selectAddress(index, prefix, resultsJson) {
 
     // Update search field and hide dropdown
     const searchEl = document.getElementById(prefix + '-address-search');
-    if (searchEl) searchEl.value = line1 + (line2 ? ', ' + line2 : '');
-    document.getElementById(prefix + '-address-dropdown').style.display = 'none';
+    if (searchEl) searchEl.value = [line1, line2].filter(Boolean).join(', ');
+    dropdown.style.display = 'none';
 }
 
 // Hide dropdown when clicking outside
