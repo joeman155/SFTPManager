@@ -51,15 +51,14 @@
         .plan-card h6 { font-weight:700; margin-bottom:4px; }
         .tc-box { background:#f8f9fa; border:1px solid #e5e7eb; border-radius:8px; padding:16px; max-height:200px; overflow-y:auto; font-size:.88rem; margin-bottom:16px; }
 
-        .account-panel { position:fixed; top:0; right:-480px; width:480px; max-width:95vw; height:100vh; background:#fff; z-index:3000; box-shadow:-4px 0 24px rgba(0,0,0,0.15); transition:right .3s ease; overflow-y:auto; }
-        .account-panel.open { right:0; }
-        .account-panel-header { padding:20px 24px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:#fff; z-index:1; }
-        .account-panel-body { padding:24px; }
-        .account-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:2999; display:none; }
-        .account-section { margin-bottom:28px; }
-        .account-section h6 { font-weight:700; color:#1a1f36; margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid #f1f5f9; }
+        .account-section { margin-bottom:24px; }
+        .account-section h6 { font-weight:700; color:#1a1f36; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #f1f5f9; }
         .plan-badge { display:inline-flex; align-items:center; gap:8px; background:#ede9fe; color:#4f46e5; padding:6px 14px; border-radius:20px; font-weight:600; font-size:.9rem; }
         .trial-banner { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:12px 16px; color:#92400e; font-size:.88rem; margin-bottom:20px; }
+        .account-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:2000; display:none; align-items:center; justify-content:center; }
+        .account-modal-box { background:#fff; border-radius:12px; width:680px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.2); }
+        .account-modal-box .amh { padding:16px 24px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:#fff; z-index:1; }
+        .account-modal-box .amb { padding:24px; }
         .trial-notice { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:12px 16px; color:#92400e; font-size:.88rem; margin-top:12px; display:none; }
         .pw-hint { font-size:.75rem; color:#6b7280; margin-top:3px; }
     </style>
@@ -116,96 +115,100 @@
 
 
 
-<!-- Account Panel -->
-<div class="account-overlay" id="account-overlay" onclick="closeAccount()"></div>
-<div class="account-panel" id="account-panel">
-    <div class="account-panel-header">
-        <h5 class="mb-0 fw-bold">My Account</h5>
-        <button class="btn-close" onclick="closeAccount()"></button>
-    </div>
-    <div class="account-panel-body">
-
-        <div id="trial-banner" class="trial-banner" style="display:none">
-            <i class="bi bi-clock me-2"></i>
-            <strong>Free trial</strong> — expires <span id="trial-date"></span>. Add a credit card to continue after your trial.
+<!-- Account Modal -->
+<div class="account-modal-overlay" id="account-modal-overlay" onclick="closeAccount()">
+    <div class="account-modal-box" onclick="event.stopPropagation()">
+        <div class="amh">
+            <h5 class="mb-0 fw-bold">My Account</h5>
+            <button class="btn-close" onclick="closeAccount()"></button>
         </div>
+        <div class="amb">
 
-        <!-- Plan -->
-        <div class="account-section">
-            <h6>Plan</h6>
-            <div id="account-plan"><span class="text-muted small">Loading...</span></div>
-        </div>
+            <div id="trial-banner" class="trial-banner" style="display:none">
+                <i class="bi bi-clock me-2"></i>
+                <strong>Free trial</strong> — expires <span id="trial-date"></span>. Add a credit card to continue after your trial.
+            </div>
 
-        <!-- Personal Details -->
-        <div class="account-section">
-            <h6>Personal Details</h6>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">First Name</label>
-                <input class="form-control form-control-sm" type="text" id="ac-first-name">
+            <!-- Plan -->
+            <div class="account-section">
+                <h6>Plan</h6>
+                <div id="account-plan"><span class="text-muted small">Loading...</span></div>
             </div>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">Surname</label>
-                <input class="form-control form-control-sm" type="text" id="ac-surname">
-            </div>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">Phone</label>
-                <input class="form-control form-control-sm" type="tel" id="ac-phone">
-                <div class="field-error" id="ac-phone-err"></div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">Company</label>
-                <input class="form-control form-control-sm" type="text" id="ac-company">
-            </div>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">Address Line 1</label>
-                <input class="form-control form-control-sm" type="text" id="ac-address1">
-            </div>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">Address Line 2</label>
-                <input class="form-control form-control-sm" type="text" id="ac-address2">
-            </div>
-            <div class="row">
-                <div class="col-6 mb-3">
-                    <label class="form-label small fw-semibold">State</label>
-                    <input class="form-control form-control-sm" type="text" id="ac-state">
-                </div>
-                <div class="col-6 mb-3">
-                    <label class="form-label small fw-semibold">Postcode</label>
-                    <input class="form-control form-control-sm" type="text" id="ac-postcode">
-                </div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">Country</label>
-                <input class="form-control form-control-sm" type="text" id="ac-country">
-            </div>
-        </div>
 
-        <!-- Credit Card -->
-        <div class="account-section">
-            <h6>Credit Card</h6>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">Card Number</label>
-                <input class="form-control form-control-sm" type="text" id="ac-cc-number" placeholder="4111 1111 1111 1111" oninput="formatCC(this)">
-                <div class="field-error" id="ac-cc-number-err"></div>
-            </div>
-            <div class="row">
-                <div class="col-6 mb-3">
-                    <label class="form-label small fw-semibold">Name on Card</label>
-                    <input class="form-control form-control-sm" type="text" id="ac-cc-name">
-                </div>
-                <div class="col-6 mb-3">
-                    <label class="form-label small fw-semibold">Expiry (MM/YY)</label>
-                    <input class="form-control form-control-sm" type="text" id="ac-cc-expiry" placeholder="12/27" maxlength="5">
-                    <div class="field-error" id="ac-cc-expiry-err"></div>
+            <!-- Personal Details -->
+            <div class="account-section">
+                <h6>Personal Details</h6>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-semibold">First Name <span class="text-danger">*</span></label>
+                        <input class="form-control form-control-sm" type="text" id="ac-first-name">
+                        <div class="field-error" id="ac-first-name-err"></div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-semibold">Surname <span class="text-danger">*</span></label>
+                        <input class="form-control form-control-sm" type="text" id="ac-surname">
+                        <div class="field-error" id="ac-surname-err"></div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-semibold">Mobile Number <span class="text-danger">*</span></label>
+                        <input class="form-control form-control-sm" type="tel" id="ac-phone" placeholder="+61 400 000 000">
+                        <div class="field-error" id="ac-phone-err"></div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-semibold">Company</label>
+                        <input class="form-control form-control-sm" type="text" id="ac-company">
+                    </div>
+                    <div class="col-12 mb-3">
+                        <label class="form-label small fw-semibold">Address Line 1</label>
+                        <input class="form-control form-control-sm" type="text" id="ac-address1">
+                    </div>
+                    <div class="col-12 mb-3">
+                        <label class="form-label small fw-semibold">Address Line 2</label>
+                        <input class="form-control form-control-sm" type="text" id="ac-address2">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label small fw-semibold">State</label>
+                        <input class="form-control form-control-sm" type="text" id="ac-state">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label small fw-semibold">Postcode</label>
+                        <input class="form-control form-control-sm" type="text" id="ac-postcode">
+                        <div class="field-error" id="ac-postcode-err"></div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label small fw-semibold">Country</label>
+                        <input class="form-control form-control-sm" type="text" id="ac-country">
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="d-flex justify-content-end gap-2">
-            <button class="btn btn-secondary btn-sm" onclick="closeAccount()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="saveAccount()">Save changes</button>
-        </div>
+            <!-- Credit Card -->
+            <div class="account-section">
+                <h6>Credit Card</h6>
+                <div class="row">
+                    <div class="col-12 mb-3">
+                        <label class="form-label small fw-semibold">Card Number</label>
+                        <input class="form-control form-control-sm" type="text" id="ac-cc-number" placeholder="4111 1111 1111 1111" oninput="formatCC(this)">
+                        <div class="field-error" id="ac-cc-number-err"></div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-semibold">Name on Card</label>
+                        <input class="form-control form-control-sm" type="text" id="ac-cc-name">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-semibold">Expiry (MM/YY)</label>
+                        <input class="form-control form-control-sm" type="text" id="ac-cc-expiry" placeholder="12/27" maxlength="5">
+                        <div class="field-error" id="ac-cc-expiry-err"></div>
+                    </div>
+                </div>
+            </div>
 
+            <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                <button class="btn btn-secondary btn-sm" onclick="closeAccount()">Cancel</button>
+                <button class="btn btn-primary btn-sm" onclick="saveAccount()">Save changes</button>
+            </div>
+
+        </div>
     </div>
 </div>
 
@@ -263,7 +266,7 @@
         <div class="onboarding-body" id="step-3" style="display:none">
             <h6 class="fw-semibold mb-3">Contact details</h6>
             <div class="mb-3">
-                <label class="form-label small fw-semibold">Phone Number</label>
+                <label class="form-label small fw-semibold">Mobile Number <span class="text-danger">*</span></label>
                 <input class="form-control form-control-sm" type="tel" id="ob-phone" placeholder="+61 400 000 000">
                 <div class="field-error" id="ob-phone-err"></div>
             </div>
@@ -736,16 +739,26 @@ async function openAccount(e) {
         if (el) el.value = val || '';
     });
 
-    document.getElementById('account-overlay').style.display = 'block';
-    document.getElementById('account-panel').classList.add('open');
+    document.getElementById('account-modal-overlay').style.display = 'flex';
 }
 
 function closeAccount() {
-    document.getElementById('account-overlay').style.display = 'none';
-    document.getElementById('account-panel').classList.remove('open');
+    document.getElementById('account-modal-overlay').style.display = 'none';
 }
 
 async function saveAccount() {
+    // Required fields
+    const firstName = document.getElementById('ac-first-name').value.trim();
+    const surname = document.getElementById('ac-surname').value.trim();
+    const phone = document.getElementById('ac-phone').value.trim();
+    let valid = true;
+    if (!firstName) { showErr('ac-first-name', 'First name is required'); valid = false; } else showErr('ac-first-name', null);
+    if (!surname) { showErr('ac-surname', 'Surname is required'); valid = false; } else showErr('ac-surname', null);
+    if (!phone) { showErr('ac-phone', 'Mobile number is required'); valid = false; }
+    else if (!/^[\+]?[0-9\s\-\(\)]{7,20}$/.test(phone)) { showErr('ac-phone', 'Invalid mobile number'); valid = false; }
+    else showErr('ac-phone', null);
+    if (!valid) return;
+
     // Validate CC if entered
     const cc = document.getElementById('ac-cc-number').value.replace(/[\s]/g,'');
     const expiry = document.getElementById('ac-cc-expiry').value;
@@ -888,7 +901,8 @@ function obNext() {
         updateObStep(3);
     } else if (obStep === 3) {
         const phone = document.getElementById('ob-phone').value;
-        if (phone && !/^[\+]?[0-9\s\-\(\)]{7,20}$/.test(phone)) { showErr('ob-phone','Invalid phone number'); return; }
+        if (!phone || phone.trim() === '') { showErr('ob-phone', 'Mobile number is required'); return; }
+        if (!/^[\+]?[0-9\s\-\(\)]{7,20}$/.test(phone)) { showErr('ob-phone', 'Invalid mobile number'); return; }
         showErr('ob-phone', null);
         obData.phone = phone;
         updateObStep(4);
