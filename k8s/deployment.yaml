@@ -51,18 +51,26 @@ spec:
                 secretKeyRef:
                   name: sftp-manager-secrets
                   key: DB_PASSWORD
-            - name: SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID
+            - name: GOOGLE_PORTAL_CLIENT_ID
               valueFrom:
                 secretKeyRef:
                   name: sftp-manager-secrets
                   key: GOOGLE_CLIENT_ID
-            - name: SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET
+            - name: GOOGLE_PORTAL_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: sftp-manager-secrets
                   key: GOOGLE_CLIENT_SECRET
-            - name: SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_SCOPE
-              value: "email,profile"
+            - name: GOOGLE_ADMIN_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sftp-manager-secrets
+                  key: GOOGLE_CLIENT_ID
+            - name: GOOGLE_ADMIN_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sftp-manager-secrets
+                  key: GOOGLE_CLIENT_SECRET
           readinessProbe:
             httpGet:
               path: /healthz
@@ -84,3 +92,4 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+
