@@ -20,7 +20,6 @@ public class AdminRoleFilter extends OncePerRequestFilter {
 
     private final UserRepository userRepository;
 
-    // Paths that don't need role check
     private static final List<String> EXCLUDED = List.of(
         "/admin-login.html", "/admin-denied.html", "/healthz",
         "/portal", "/portal-login.html", "/portal.html",
@@ -46,13 +45,8 @@ public class AdminRoleFilter extends OncePerRequestFilter {
                                uri.startsWith("/admin/") || uri.equals("/index.html");
         if (!isAdminRoute) { chain.doFilter(request, response); return; }
 
-        // Check if session has ADMIN_VERIFIED flag
-        HttpSession session = request.getSession(false);
-        if (session != null && Boolean.TRUE.equals(session.getAttribute("ADMIN_VERIFIED"))) {
-            chain.doFilter(request, response); return;
-        }
-
-        // Not verified — check role from OAuth principal
+        // Check OAuth2 principal directly - no session attribute needed
+        // Spring Security stores the principal in the session automatically and reliably
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof OAuth2User principal) {
             String email = principal.getAttribute("email");
@@ -61,15 +55,19 @@ public class AdminRoleFilter extends OncePerRequestFilter {
                 .orElse(false);
 
             if (isAdmin) {
-                request.getSession().setAttribute("ADMIN_VERIFIED", true);
                 chain.doFilter(request, response);
                 return;
             }
+
+            // Authenticated but not admin - clear and redirect
+            SecurityContextHolder.clearContext();
+            HttpSession session = request.getSession(false);
+            if (session != null) session.invalidate();
+            response.sendRedirect("/admin-denied.html");
+            return;
         }
 
-        // Not admin — clear session and redirect to denied
-        SecurityContextHolder.clearContext();
-        if (session != null) session.invalidate();
-        response.sendRedirect("/admin-denied.html");
+        // Not authenticated at all - Spring Security will redirect to login
+        chain.doFilter(request, response);
     }
 }

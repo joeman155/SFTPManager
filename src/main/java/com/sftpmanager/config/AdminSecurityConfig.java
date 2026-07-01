@@ -40,7 +40,6 @@ public class AdminSecurityConfig {
                 .requestMatchers("/admin-login.html", "/admin-denied.html").permitAll()
                 .requestMatchers("/oauth2/authorization/google-admin", "/login/oauth2/code/google-admin").permitAll()
                 .requestMatchers("/healthz").permitAll()
-                // Require admin role attribute on session for all other routes
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth -> oauth
@@ -67,16 +66,11 @@ public class AdminSecurityConfig {
                 .orElse(false);
 
             if (isAdmin) {
-                // Mark session as verified admin so the filter can check it
-                request.getSession().setAttribute("ADMIN_VERIFIED", true);
                 response.sendRedirect("/");
             } else {
-                // Immediately invalidate session so they can't bypass denied page
                 SecurityContextHolder.clearContext();
                 HttpSession session = request.getSession(false);
-                if (session != null) {
-                    session.invalidate();
-                }
+                if (session != null) session.invalidate();
                 response.sendRedirect("/admin-denied.html");
             }
         };
