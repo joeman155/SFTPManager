@@ -51,6 +51,14 @@
         .plan-card h6 { font-weight:700; margin-bottom:4px; }
         .tc-box { background:#f8f9fa; border:1px solid #e5e7eb; border-radius:8px; padding:16px; max-height:200px; overflow-y:auto; font-size:.88rem; margin-bottom:16px; }
 
+
+        .autocomplete-wrapper { position:relative; }
+        .autocomplete-dropdown { position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #d1d5db; border-top:none; border-radius:0 0 8px 8px; box-shadow:0 4px 12px rgba(0,0,0,0.1); z-index:9999; max-height:200px; overflow-y:auto; }
+        .autocomplete-item { padding:10px 14px; cursor:pointer; font-size:.85rem; border-bottom:1px solid #f3f4f6; line-height:1.4; }
+        .autocomplete-item:last-child { border-bottom:none; }
+        .autocomplete-item:hover { background:#f5f3ff; color:#4f46e5; }
+        .autocomplete-item .ac-main { font-weight:500; }
+        .autocomplete-item .ac-sub { color:#6b7280; font-size:.78rem; }
         .account-section { margin-bottom:24px; }
         .account-section h6 { font-weight:700; color:#1a1f36; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #f1f5f9; }
         .plan-badge { display:inline-flex; align-items:center; gap:8px; background:#ede9fe; color:#4f46e5; padding:6px 14px; border-radius:20px; font-weight:600; font-size:.9rem; }
@@ -157,6 +165,16 @@
                     <div class="col-md-6 mb-3">
                         <label class="form-label small fw-semibold">Company</label>
                         <input class="form-control form-control-sm" type="text" id="ac-company">
+                    </div>
+                    <div class="col-12 mb-3">
+                        <label class="form-label small fw-semibold">Address Search</label>
+                        <div class="autocomplete-wrapper">
+                            <input class="form-control form-control-sm" type="text" id="ac-address-search"
+                                placeholder="Start typing your address..." autocomplete="off"
+                                oninput="addressAutocomplete(this, 'ac')">
+                            <div class="autocomplete-dropdown" id="ac-address-dropdown" style="display:none"></div>
+                        </div>
+                        <div class="form-text">Select from suggestions to auto-fill fields below</div>
                     </div>
                     <div class="col-12 mb-3">
                         <label class="form-label small fw-semibold">Address Line 1</label>
@@ -695,6 +713,79 @@ async function backToWhitelist() {
 
 
 
+
+// ── Address Autocomplete (Nominatim / OpenStreetMap) ──
+let acTimer = null;
+
+async function addressAutocomplete(input, prefix) {
+    const query = input.value.trim();
+    const dropdown = document.getElementById(prefix + '-address-dropdown');
+
+    if (query.length < 3) { dropdown.style.display = 'none'; return; }
+
+    // Debounce — wait 400ms after user stops typing (respects Nominatim usage policy)
+    clearTimeout(acTimer);
+    acTimer = setTimeout(async () => {
+        try {
+            const res = await fetch(
+                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5`,
+                { headers: { 'Accept-Language': 'en', 'User-Agent': 'SFTPManager/1.0' } }
+            );
+            const results = await res.json();
+
+            if (!results.length) { dropdown.style.display = 'none'; return; }
+
+            dropdown.innerHTML = results.map((r, i) => {
+                const a = r.address || {};
+                const main = [a.house_number, a.road].filter(Boolean).join(' ') || r.display_name.split(',')[0];
+                const sub  = r.display_name;
+                return `<div class="autocomplete-item" onclick="selectAddress(${i}, '${prefix}', ${JSON.stringify(results).replace(/"/g,'&quot;')})">
+                    <div class="ac-main">${main}</div>
+                    <div class="ac-sub">${sub}</div>
+                </div>`;
+            }).join('');
+
+            dropdown.style.display = 'block';
+        } catch (e) {
+            dropdown.style.display = 'none';
+        }
+    }, 400);
+}
+
+function selectAddress(index, prefix, resultsJson) {
+    const results = typeof resultsJson === 'string' ? JSON.parse(resultsJson.replace(/&quot;/g,'"')) : resultsJson;
+    const r = results[index];
+    const a = r.address || {};
+
+    // Build address line 1
+    const line1 = [a.house_number, a.road].filter(Boolean).join(' ');
+    // Build address line 2 (suburb/neighbourhood)
+    const line2 = a.suburb || a.neighbourhood || a.city_district || '';
+    const state = a.state || a.region || '';
+    const postcode = a.postcode || '';
+    const country = a.country || '';
+
+    // Fill fields
+    const setField = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+    setField(prefix + '-address1', line1);
+    setField(prefix + '-address2', line2);
+    setField(prefix + '-state',    state);
+    setField(prefix + '-postcode', postcode);
+    setField(prefix + '-country',  country);
+
+    // Update search field and hide dropdown
+    const searchEl = document.getElementById(prefix + '-address-search');
+    if (searchEl) searchEl.value = line1 + (line2 ? ', ' + line2 : '');
+    document.getElementById(prefix + '-address-dropdown').style.display = 'none';
+}
+
+// Hide dropdown when clicking outside
+document.addEventListener('click', e => {
+    document.querySelectorAll('.autocomplete-dropdown').forEach(d => {
+        if (!d.parentElement.contains(e.target)) d.style.display = 'none';
+    });
+});
+
 // ── Account Panel ──
 async function openAccount(e) {
     e.preventDefault();
@@ -738,6 +829,12 @@ async function openAccount(e) {
         const el = document.getElementById(id);
         if (el) el.value = val || '';
     });
+    // Pre-fill address search field with current address
+    const searchEl = document.getElementById('ac-address-search');
+    if (searchEl) {
+        const parts = [user.addressLine1, user.addressLine2].filter(Boolean);
+        searchEl.value = parts.join(', ');
+    }
 
     document.getElementById('account-modal-overlay').style.display = 'flex';
 }
