@@ -777,16 +777,35 @@ function selectAddress(index, prefix) {
     const r = results[index];
     const a = r.address || {};
 
-    // Extract all address components
-    const num     = a.house_number || '';
-    const road    = a.road || a.pedestrian || a.footway || '';
+    // Extract street components
+    const road    = a.road || a.pedestrian || a.footway || a.path || '';
     const suburb  = a.suburb || a.neighbourhood || a.city_district || a.town || a.village || '';
     const state   = a.state || a.region || '';
     const postcode = a.postcode || '';
     const country  = a.country || '';
 
-    // Line 1 = number + street — if no house number, use first part of display_name
-    const line1 = num && road ? `${num} ${road}` : road || r.display_name.split(',')[0];
+    // Nominatim often omits house_number from address object even when typed
+    // Extract it from display_name first segment instead
+    let num = a.house_number || '';
+    if (!num && road) {
+        // display_name format: "13, Munburra Parade, Suburb, State..."
+        // or "13 Munburra Parade, Suburb, State..."
+        const firstPart = r.display_name.split(',')[0].trim();
+        // Check if firstPart starts with a number (house number)
+        const numMatch = firstPart.match(/^(\d+[A-Za-z]?)\s+/);
+        if (numMatch) {
+            num = numMatch[1];
+        }
+    }
+
+    // Also try extracting from the user's original search input as fallback
+    if (!num) {
+        const searchVal = document.getElementById(prefix + '-address-search').value.trim();
+        const searchNumMatch = searchVal.match(/^(\d+[A-Za-z]?)\s+/);
+        if (searchNumMatch) num = searchNumMatch[1];
+    }
+
+    const line1 = [num, road].filter(Boolean).join(' ') || r.display_name.split(',')[0];
     const line2 = suburb;
 
     const setField = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -796,7 +815,6 @@ function selectAddress(index, prefix) {
     setField(prefix + '-postcode', postcode);
     setField(prefix + '-country',  country);
 
-    // Update search field and hide dropdown
     const searchEl = document.getElementById(prefix + '-address-search');
     if (searchEl) searchEl.value = [line1, line2].filter(Boolean).join(', ');
     dropdown.style.display = 'none';
