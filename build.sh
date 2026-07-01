@@ -29,15 +29,20 @@ echo ""
 echo "▶ 1/7  Authenticating with Google Cloud..."
 gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 
-# ── Step 2: Build Docker image ───────────────────────────────────
-echo "▶ 2/7  Building Docker image..."
-docker build -t ${IMAGE_URL}:latest .
-echo "       Built: ${IMAGE_URL}:latest"
 
-# ── Step 3: Push to Artifact Registry ───────────────────────────
-echo "▶ 3/7  Pushing image to Artifact Registry..."
-docker push ${IMAGE_URL}:latest
-echo "       Pushed: ${IMAGE_URL}:latest"
+# ── Step 1: Enable Cloud Build API (first time only) ─────────────
+echo "▶ 1/6  Checking Cloud Build API..."
+gcloud services enable cloudbuild.googleapis.com --project=${PROJECT_ID} --quiet
+
+# ── Step 2: Build & push via Cloud Build ─────────────────────────
+echo "▶ 2/6  Building and pushing image via Cloud Build..."
+echo "       (runs on Google's servers — fast network, no local Docker needed)"
+gcloud builds submit \
+  --tag ${IMAGE_URL}:latest \
+  --project ${PROJECT_ID} \
+
+echo "       Image pushed: ${IMAGE_URL}:latest"
+
 
 # ── Step 4: Connect to GKE cluster ──────────────────────────────
 echo "▶ 4/7  Connecting to GKE cluster..."

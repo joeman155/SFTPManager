@@ -10,7 +10,7 @@ RUN mvn dependency:go-offline -q
 # Now copy source and build
 # Only this layer reruns when src/ changes
 COPY src ./src
-RUN mvn clean package -DskipTests -q -o
+RUN mvn clean package -DskipTests -q
 
 # ── Stage 2: Runtime ──
 FROM eclipse-temurin:17-jre-alpine

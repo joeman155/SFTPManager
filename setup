@@ -1,0 +1,12 @@
+# Get your project number
+PROJECT_ID=$(gcloud config get-value project)
+
+# Grant Cloud Build permissions to your account
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="user:joeman1556@gmail.com" \
+  --role="roles/cloudbuild.builds.editor"
+
+# Also need Artifact Registry write access
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+  --member="user:joeman1556@gmail.com" \
+  --role="roles/artifactregistry.writer"
