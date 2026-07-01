@@ -772,16 +772,9 @@ async function saveAccount() {
         showErr('ac-cc-expiry', null);
     }
 
-    // Validate phone
-    const phone = document.getElementById('ac-phone').value;
-    if (phone && !/^[\+]?[0-9\s\-\(\)]{7,20}$/.test(phone)) {
-        showErr('ac-phone', 'Invalid phone number'); return;
-    }
-    showErr('ac-phone', null);
-
     const body = {
-        firstName:   document.getElementById('ac-first-name').value,
-        surname:     document.getElementById('ac-surname').value,
+        firstName:   firstName,
+        surname:     surname,
         phone:       phone,
         company:     document.getElementById('ac-company').value,
         addressLine1: document.getElementById('ac-address1').value,
