@@ -56,3 +56,13 @@ sed "s|REGION-docker.pkg.dev/YOUR_PROJECT_ID/sftp-manager/sftp-manager:latest|${
   k8s/deployment.yaml | kubectl apply -f -
 
 
+
+
+echo "       Waiting for rollout..."
+kubectl rollout status deployment/sftp-manager -n sftp-manager --timeout=180s
+
+# ── Step 6: Show status ──────────────────────────────────────────
+echo "▶ 6/6  Status..."
+echo ""
+echo "  Pods:"
+kubectl get pods -n sftp-manager
