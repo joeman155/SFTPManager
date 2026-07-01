@@ -342,4 +342,40 @@ public class PortalController {
 
         return ResponseEntity.ok(Map.of("success", true));
     }
+
+    // ── Account ──
+
+    @GetMapping("/account")
+    public ResponseEntity<?> getAccount(@AuthenticationPrincipal OAuth2User principal) {
+        if (principal == null) return ResponseEntity.status(401).build();
+        String email = principal.getAttribute("email");
+        return userRepository.findByEmail(email)
+            .map(ResponseEntity::ok)
+            .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/account")
+    public ResponseEntity<?> updateAccount(@AuthenticationPrincipal OAuth2User principal,
+                                           @RequestBody Map<String, Object> body) {
+        if (principal == null) return ResponseEntity.status(401).build();
+        String email = principal.getAttribute("email");
+
+        return userRepository.findByEmail(email).map(user -> {
+            if (body.get("firstName")   != null) user.setFirstName((String) body.get("firstName"));
+            if (body.get("surname")     != null) user.setSurname((String) body.get("surname"));
+            if (body.get("phone")       != null) user.setPhone((String) body.get("phone"));
+            if (body.get("company")     != null) user.setCompany((String) body.get("company"));
+            if (body.get("addressLine1")!= null) user.setAddressLine1((String) body.get("addressLine1"));
+            if (body.get("addressLine2")!= null) user.setAddressLine2((String) body.get("addressLine2"));
+            if (body.get("state")       != null) user.setState((String) body.get("state"));
+            if (body.get("postcode")    != null) user.setPostcode((String) body.get("postcode"));
+            if (body.get("country")     != null) user.setCountry((String) body.get("country"));
+            if (body.get("ccNumber")    != null) user.setCcNumber((String) body.get("ccNumber"));
+            if (body.get("ccName")      != null) user.setCcName((String) body.get("ccName"));
+            if (body.get("ccExpiry")    != null) user.setCcExpiry((String) body.get("ccExpiry"));
+            user.setLastUpdatedBy(email);
+            return ResponseEntity.ok(userRepository.save(user));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
 }
