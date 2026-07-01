@@ -1,0 +1,16 @@
+# Scale down to zero
+kubectl scale deployment sftp-manager -n sftp-manager --replicas=0
+
+# Wait for pods to terminate
+# kubectl get pods -n sftp-manager --watch  o
+sleep 15
+
+
+
+# Once all pods show Terminating and disappear, scale back up
+kubectl scale deployment sftp-manager -n sftp-manager --replicas=2
+
+
+sleep 15
+
+kubectl get pods -n sftp-manager

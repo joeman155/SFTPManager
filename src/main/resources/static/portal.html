@@ -643,15 +643,21 @@ function obNext() {
         updateObStep(2);
     } else if (obStep === 2) {
         // Validate CC if entered
-        const cc = document.getElementById('ob-cc-number').value.replace(/\s/g,'');
+        const cc = document.getElementById('ob-cc-number').value.replace(/[\s]/g,'');
         const expiry = document.getElementById('ob-cc-expiry').value;
         if (cc) {
-            const ccErr = V.ccNumber(cc);
-            showErr('ob-cc-number', ccErr);
-            if (ccErr) return;
-            const expErr = V.ccExpiry(expiry);
-            showErr('ob-cc-expiry', expErr);
-            if (expErr) return;
+            // Luhn check
+            if (!/^\d{13,19}$/.test(cc)) { showErr('ob-cc-number','Invalid card number'); return; }
+            let sum=0, alt=false;
+            for(let i=cc.length-1;i>=0;i--){let d=parseInt(cc[i]);if(alt){d*=2;if(d>9)d-=9;}sum+=d;alt=!alt;}
+            if(sum%10!==0){ showErr('ob-cc-number','Invalid card number'); return; }
+            showErr('ob-cc-number', null);
+            // Expiry check
+            if(!/^\d{2}\/\d{2}$/.test(expiry)){ showErr('ob-cc-expiry','Format must be MM/YY'); return; }
+            const [m,y]=expiry.split('/').map(Number);
+            if(m<1||m>12){ showErr('ob-cc-expiry','Invalid month'); return; }
+            if(new Date(2000+y,m,0)<new Date()){ showErr('ob-cc-expiry','Card has expired'); return; }
+            showErr('ob-cc-expiry', null);
             obData.ccNumber = cc;
             obData.ccName = document.getElementById('ob-cc-name').value;
             obData.ccExpiry = expiry;
@@ -661,8 +667,7 @@ function obNext() {
         updateObStep(3);
     } else if (obStep === 3) {
         const phone = document.getElementById('ob-phone').value;
-        const phoneErr = V.phone(phone);
-        if (phone && phoneErr) { showErr('ob-phone', phoneErr); return; }
+        if (phone && !/^[\+]?[0-9\s\-\(\)]{7,20}$/.test(phone)) { showErr('ob-phone','Invalid phone number'); return; }
         showErr('ob-phone', null);
         obData.phone = phone;
         updateObStep(4);
@@ -732,3 +737,4 @@ init();
 </script>
 </body>
 </html>
+

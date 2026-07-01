@@ -23,6 +23,7 @@ spec:
       containers:
         - name: sftp-manager
           image: REGION-docker.pkg.dev/YOUR_PROJECT_ID/sftp-manager/sftp-manager:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
