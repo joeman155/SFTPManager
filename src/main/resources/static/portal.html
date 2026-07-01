@@ -542,7 +542,7 @@ function openAccountForm(data={}) {
         </div>
         <div class="d-flex justify-content-end gap-2">
             <button class="btn btn-secondary btn-sm" onclick="backToAccounts()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="saveAccount()">Save</button>
+            <button class="btn btn-primary btn-sm" onclick="saveSvcAccount()">Save</button>
         </div>`;
 
     openSubModal((editingAcctId?'Edit':'New')+' Service Account', html);
@@ -572,7 +572,7 @@ function updateStrength(pw) {
     document.getElementById('str-label').textContent=labels[s-1]||'';
 }
 
-async function saveAccount() {
+async function saveSvcAccount() {
     const authType = getVal('acctAuth');
     const rules = [['acctUser',V.required],['acctAuth',V.required]];
     if (authType==='PASSWORD') rules.push(['acctPw',V.required,V.password]);
