@@ -37,6 +37,20 @@
         .section-panel.active { display:block; }
         .account-card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.07); padding:16px 20px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
         .strength-bar { height:5px; border-radius:3px; margin-top:5px; transition:all .3s; }
+        .onboarding-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:2000; display:none; align-items:center; justify-content:center; }
+        .onboarding-box { background:#fff; border-radius:16px; width:640px; max-width:95vw; max-height:92vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+        .onboarding-header { padding:24px 28px 0; }
+        .onboarding-body { padding:24px 28px; }
+        .onboarding-footer { padding:16px 28px 24px; border-top:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; }
+        .step-dots { display:flex; gap:8px; }
+        .step-dot { width:10px; height:10px; border-radius:50%; background:#e5e7eb; transition:background .3s; }
+        .step-dot.active { background:#4f46e5; }
+        .plan-card { border:2px solid #e5e7eb; border-radius:12px; padding:20px; cursor:pointer; transition:all .2s; margin-bottom:12px; }
+        .plan-card:hover { border-color:#4f46e5; background:#faf9ff; }
+        .plan-card.selected { border-color:#4f46e5; background:#ede9fe; }
+        .plan-card h6 { font-weight:700; margin-bottom:4px; }
+        .tc-box { background:#f8f9fa; border:1px solid #e5e7eb; border-radius:8px; padding:16px; max-height:200px; overflow-y:auto; font-size:.88rem; margin-bottom:16px; }
+        .trial-notice { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:12px 16px; color:#92400e; font-size:.88rem; margin-top:12px; display:none; }
         .pw-hint { font-size:.75rem; color:#6b7280; margin-top:3px; }
     </style>
 </head>
@@ -87,6 +101,94 @@
         <button class="btn-close" onclick="closeSubModal()"></button>
     </div>
     <div class="mb" id="sub-body"></div>
+</div>
+
+
+<!-- Onboarding Modal -->
+<div class="onboarding-overlay" id="onboarding-overlay">
+    <div class="onboarding-box">
+        <div class="onboarding-header">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <h5 class="mb-0 fw-bold">Welcome to SFTP Manager</h5>
+                <div class="step-dots">
+                    <div class="step-dot active" id="dot-1"></div>
+                    <div class="step-dot" id="dot-2"></div>
+                    <div class="step-dot" id="dot-3"></div>
+                    <div class="step-dot" id="dot-4"></div>
+                </div>
+            </div>
+            <p class="text-muted small mb-0" id="step-subtitle">Let's get you set up</p>
+            <hr/>
+        </div>
+
+        <!-- Step 1: Choose Plan -->
+        <div class="onboarding-body" id="step-1">
+            <h6 class="fw-semibold mb-3">Choose your plan</h6>
+            <div id="plan-list"></div>
+        </div>
+
+        <!-- Step 2: Payment -->
+        <div class="onboarding-body" id="step-2" style="display:none">
+            <h6 class="fw-semibold mb-3">Payment details</h6>
+            <p class="text-muted small">Enter your credit card details to activate your plan. You can skip this to start a 7-day free trial.</p>
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">Card Number</label>
+                <input class="form-control form-control-sm" type="text" id="ob-cc-number" placeholder="4111 1111 1111 1111" oninput="formatCC(this)">
+                <div class="field-error" id="ob-cc-number-err"></div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label small fw-semibold">Name on Card</label>
+                    <input class="form-control form-control-sm" type="text" id="ob-cc-name" placeholder="Jane Smith">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label small fw-semibold">Expiry (MM/YY)</label>
+                    <input class="form-control form-control-sm" type="text" id="ob-cc-expiry" placeholder="12/27" maxlength="5">
+                    <div class="field-error" id="ob-cc-expiry-err"></div>
+                </div>
+            </div>
+            <div class="trial-notice" id="trial-notice">
+                <i class="bi bi-clock me-2"></i>
+                <strong>7-day free trial.</strong> You have 7 days to enter credit card details before your account is suspended.
+            </div>
+        </div>
+
+        <!-- Step 3: Phone -->
+        <div class="onboarding-body" id="step-3" style="display:none">
+            <h6 class="fw-semibold mb-3">Contact details</h6>
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">Phone Number</label>
+                <input class="form-control form-control-sm" type="tel" id="ob-phone" placeholder="+61 400 000 000">
+                <div class="field-error" id="ob-phone-err"></div>
+            </div>
+        </div>
+
+        <!-- Step 4: Terms -->
+        <div class="onboarding-body" id="step-4" style="display:none">
+            <h6 class="fw-semibold mb-3">Terms and Conditions</h6>
+            <div class="tc-box" id="tc-content"></div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ob-tc-accept">
+                <label class="form-check-label small">I have read and agree to the Terms and Conditions</label>
+            </div>
+            <div class="field-error" id="ob-tc-err"></div>
+        </div>
+
+        <div class="onboarding-footer">
+            <button class="btn btn-outline-secondary btn-sm" id="ob-back-btn" onclick="obBack()" style="display:none">
+                <i class="bi bi-arrow-left me-1"></i>Back
+            </button>
+            <div></div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm" id="ob-skip-btn" onclick="obSkipCC()" style="display:none">
+                    Skip — start free trial
+                </button>
+                <button class="btn btn-primary btn-sm" id="ob-next-btn" onclick="obNext()">
+                    Next <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -258,6 +360,7 @@ async function saveService() {
 async function deleteService(id) {
     if (!confirm('Delete this SFTP service and all its accounts and IP rules?')) return;
     await fetch(`/portal/api/services/${id}`, { method:'DELETE' });
+    await checkOnboarding();
     loadServices();
 }
 
@@ -481,6 +584,135 @@ async function backToWhitelist() {
     renderWhitelistModal(svcName, rows);
 }
 
+
+// ── Onboarding ──
+let obStep = 1;
+let obData = { planId: null, ccNumber: null, ccName: null, ccExpiry: null, phone: null, skipCC: false };
+let obPlans = [];
+
+async function checkOnboarding() {
+    const res = await fetch('/portal/api/onboarding');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.onboarded) return; // already done
+
+    obPlans = data.plans || [];
+
+    // Render plans
+    document.getElementById('plan-list').innerHTML = obPlans.map(p => `
+        <div class="plan-card" id="plan-${p.id}" onclick="selectPlan(${p.id})">
+            <h6>${p.name}</h6>
+            <p class="text-muted small mb-0">${p.description}</p>
+        </div>`).join('');
+
+    // Render T&C
+    document.getElementById('tc-content').innerHTML = data.termsAndConditions || '';
+
+    // Show modal
+    document.getElementById('onboarding-overlay').style.display = 'flex';
+    updateObStep(1);
+}
+
+function selectPlan(planId) {
+    obData.planId = planId;
+    document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('plan-' + planId).classList.add('selected');
+}
+
+function updateObStep(step) {
+    obStep = step;
+    for (let i = 1; i <= 4; i++) {
+        document.getElementById('step-' + i).style.display = i === step ? 'block' : 'none';
+        document.getElementById('dot-' + i).classList.toggle('active', i === step);
+    }
+    const subtitles = {
+        1: 'Choose a plan that suits your needs',
+        2: 'Enter payment details (optional — skip for 7-day trial)',
+        3: 'How can we contact you?',
+        4: 'Please read and accept our terms'
+    };
+    document.getElementById('step-subtitle').textContent = subtitles[step];
+    document.getElementById('ob-back-btn').style.display = step > 1 ? 'block' : 'none';
+    document.getElementById('ob-skip-btn').style.display = step === 2 ? 'block' : 'none';
+    document.getElementById('ob-next-btn').textContent = step === 4 ? 'Accept & Continue' : 'Next ›';
+}
+
+function obNext() {
+    if (obStep === 1) {
+        if (!obData.planId) { alert('Please select a plan to continue.'); return; }
+        updateObStep(2);
+    } else if (obStep === 2) {
+        // Validate CC if entered
+        const cc = document.getElementById('ob-cc-number').value.replace(/\s/g,'');
+        const expiry = document.getElementById('ob-cc-expiry').value;
+        if (cc) {
+            const ccErr = V.ccNumber(cc);
+            showErr('ob-cc-number', ccErr);
+            if (ccErr) return;
+            const expErr = V.ccExpiry(expiry);
+            showErr('ob-cc-expiry', expErr);
+            if (expErr) return;
+            obData.ccNumber = cc;
+            obData.ccName = document.getElementById('ob-cc-name').value;
+            obData.ccExpiry = expiry;
+            obData.skipCC = false;
+            document.getElementById('trial-notice').style.display = 'none';
+        }
+        updateObStep(3);
+    } else if (obStep === 3) {
+        const phone = document.getElementById('ob-phone').value;
+        const phoneErr = V.phone(phone);
+        if (phone && phoneErr) { showErr('ob-phone', phoneErr); return; }
+        showErr('ob-phone', null);
+        obData.phone = phone;
+        updateObStep(4);
+    } else if (obStep === 4) {
+        if (!document.getElementById('ob-tc-accept').checked) {
+            showErr('ob-tc-err', 'You must accept the terms and conditions to continue.');
+            return;
+        }
+        submitOnboarding();
+    }
+}
+
+function obBack() {
+    if (obStep > 1) updateObStep(obStep - 1);
+}
+
+function obSkipCC() {
+    obData.skipCC = true;
+    obData.ccNumber = null;
+    obData.ccName = null;
+    obData.ccExpiry = null;
+    document.getElementById('trial-notice').style.display = 'block';
+    updateObStep(3);
+}
+
+function formatCC(input) {
+    let v = input.value.replace(/\D/g,'').substring(0,16);
+    input.value = v.replace(/(.{4})/g,'$1 ').trim();
+}
+
+async function submitOnboarding() {
+    const res = await fetch('/portal/api/onboarding', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+            planId:   obData.planId,
+            ccNumber: obData.ccNumber,
+            ccName:   obData.ccName,
+            ccExpiry: obData.ccExpiry,
+            phone:    obData.phone
+        })
+    });
+    if (res.ok) {
+        document.getElementById('onboarding-overlay').style.display = 'none';
+        loadServices();
+    } else {
+        alert('Something went wrong. Please try again.');
+    }
+}
+
 // ── Init ──
 async function init() {
     const res = await fetch('/portal/api/me');
@@ -492,6 +724,7 @@ async function init() {
         const av = document.getElementById('user-avatar');
         av.src = me.picture; av.style.display = 'block';
     }
+    await checkOnboarding();
     loadServices();
 }
 

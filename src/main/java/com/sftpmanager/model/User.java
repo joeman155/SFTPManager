@@ -3,6 +3,7 @@ package com.sftpmanager.model;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "users")
@@ -73,6 +74,17 @@ public class User {
     @Column(name = "role", nullable = false)
     private Integer role = 1;
 
+    // Onboarding
+    @Column(name = "onboarded", nullable = false)
+    private Boolean onboarded = false;
+
+    @Column(name = "trial_expires")
+    private LocalDate trialExpires;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "plan_id")
+    private Plan plan;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "account_controls_id")
     private AccountControls accountControls;
@@ -135,6 +147,12 @@ public class User {
     public void setBackupCcExpiry(String v) { this.backupCcExpiry = v; }
     public Integer getRole() { return role; }
     public void setRole(Integer v) { this.role = v; }
+    public Boolean getOnboarded() { return onboarded; }
+    public void setOnboarded(Boolean v) { this.onboarded = v; }
+    public LocalDate getTrialExpires() { return trialExpires; }
+    public void setTrialExpires(LocalDate v) { this.trialExpires = v; }
+    public Plan getPlan() { return plan; }
+    public void setPlan(Plan v) { this.plan = v; }
     public AccountControls getAccountControls() { return accountControls; }
     public void setAccountControls(AccountControls v) { this.accountControls = v; }
     public LocalDateTime getCreationDate() { return creationDate; }

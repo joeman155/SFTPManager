@@ -1,6 +1,8 @@
 package com.sftpmanager.controller;
 
 import com.sftpmanager.model.*;
+import com.sftpmanager.repository.PlanRepository;
+import com.sftpmanager.repository.RuntimeSettingsRepository;
 import com.sftpmanager.repository.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,17 +23,23 @@ public class PortalController {
     private final SftpServiceRepository sftpServiceRepository;
     private final SftpServiceAccountRepository accountRepository;
     private final SftpServiceIpWhitelistRepository whitelistRepository;
+    private final PlanRepository planRepository;
+    private final RuntimeSettingsRepository runtimeSettingsRepository;
 
     public PortalController(PortalUserRepository portalUserRepository,
                             UserRepository userRepository,
                             SftpServiceRepository sftpServiceRepository,
                             SftpServiceAccountRepository accountRepository,
-                            SftpServiceIpWhitelistRepository whitelistRepository) {
+                            SftpServiceIpWhitelistRepository whitelistRepository,
+                            PlanRepository planRepository,
+                            RuntimeSettingsRepository runtimeSettingsRepository) {
         this.portalUserRepository = portalUserRepository;
         this.userRepository = userRepository;
         this.sftpServiceRepository = sftpServiceRepository;
         this.accountRepository = accountRepository;
         this.whitelistRepository = whitelistRepository;
+        this.planRepository = planRepository;
+        this.runtimeSettingsRepository = runtimeSettingsRepository;
     }
 
     // ── Helper: get current User from OAuth principal ──
@@ -260,5 +268,78 @@ public class PortalController {
             whitelistRepository.deleteById(id);
             return ResponseEntity.noContent().build();
         }).orElse(ResponseEntity.status(401).build());
+    }
+
+    // ── Onboarding ──
+
+    @GetMapping("/onboarding")
+    public ResponseEntity<?> getOnboardingData(@AuthenticationPrincipal OAuth2User principal) {
+        if (principal == null) return ResponseEntity.status(401).build();
+        String email = principal.getAttribute("email");
+
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) return ResponseEntity.status(404).build();
+
+        // Already onboarded
+        if (Boolean.TRUE.equals(user.getOnboarded())) {
+            return ResponseEntity.ok(Map.of("onboarded", true));
+        }
+
+        // Get plans
+        List<Plan> plans = planRepository.findAll();
+
+        // Get T&C from runtime settings
+        String tc = runtimeSettingsRepository.findByName("termsandconditions")
+            .map(RuntimeSettings::getValue)
+            .orElse("<p>Please contact your administrator for terms and conditions.</p>");
+
+        return ResponseEntity.ok(Map.of(
+            "onboarded", false,
+            "plans", plans,
+            "termsAndConditions", tc
+        ));
+    }
+
+    @PostMapping("/onboarding")
+    public ResponseEntity<?> completeOnboarding(@AuthenticationPrincipal OAuth2User principal,
+                                                @RequestBody Map<String, Object> body) {
+        if (principal == null) return ResponseEntity.status(401).build();
+        String email = principal.getAttribute("email");
+
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) return ResponseEntity.status(404).build();
+
+        // Set plan
+        Integer planId = body.get("planId") != null ? Integer.valueOf(body.get("planId").toString()) : null;
+        if (planId != null) {
+            planRepository.findById(planId).ifPresent(user::setPlan);
+        }
+
+        // Set CC details if provided
+        String ccNumber = (String) body.get("ccNumber");
+        String ccName   = (String) body.get("ccName");
+        String ccExpiry = (String) body.get("ccExpiry");
+
+        if (ccNumber != null && !ccNumber.isBlank()) {
+            user.setCcNumber(ccNumber);
+            user.setCcName(ccName);
+            user.setCcExpiry(ccExpiry);
+            user.setTrialExpires(null); // has CC, no trial needed
+        } else {
+            // No CC - set 7 day trial
+            user.setTrialExpires(java.time.LocalDate.now().plusDays(7));
+        }
+
+        // Set phone
+        String phone = (String) body.get("phone");
+        if (phone != null && !phone.isBlank()) {
+            user.setPhone(phone);
+        }
+
+        user.setOnboarded(true);
+        user.setLastUpdatedBy(email);
+        userRepository.save(user);
+
+        return ResponseEntity.ok(Map.of("success", true));
     }
 }
