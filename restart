@@ -14,3 +14,9 @@ kubectl scale deployment sftp-manager -n sftp-manager --replicas=2
 sleep 15
 
 kubectl get pods -n sftp-manager
+
+
+echo press control-c when done.
+
+
+watch -n 2 kubectl get pods -n sftp-manager

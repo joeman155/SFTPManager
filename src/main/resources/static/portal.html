@@ -439,63 +439,75 @@ function closeSubModal() {
 
 // ── Load services ──
 async function loadServices() {
-    return new Promise(async (resolve) => {
-    const res = await fetch('/portal/api/services');
-    const data = await res.json();
-    const container = document.getElementById('services-list');
+    try {
+        const res = await fetch('/portal/api/services');
+        const data = await res.json();
+        const container = document.getElementById('services-list');
 
-    if (!data.services || data.services.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="bi bi-hdd-network d-block"></i>
-                <h6>No SFTP services yet</h6>
-                <p>Click <strong>New SFTP Service</strong> to create your first connection.</p>
-            </div>`;
-        resolve(); return;
+        if (!data.services || data.services.length === 0) {
+            container.innerHTML = '<div class="empty-state">'
+                + '<i class="bi bi-hdd-network d-block"></i>'
+                + '<h6>No SFTP services yet</h6>'
+                + '<p>Click <strong>New SFTP Service</strong> to create your first connection.</p>'
+                + '</div>';
+            return;
+        }
+
+        window._svcData = window._svcData || {};
+        container.innerHTML = data.services.map(s => {
+            window._svcData[s.id] = s;
+            const desc = s.description
+                ? '<div class="text-muted small mb-1">' + s.description + '</div>'
+                : '';
+            return '<div class="service-card">'
+                + '<div class="d-flex align-items-center">'
+                + '<div class="service-icon"><i class="bi bi-hdd-network"></i></div>'
+                + '<div class="service-info">'
+                + '<h6 class="mb-1">' + s.name + '</h6>'
+                + desc
+                + '<code class="small text-secondary">' + s.host + '</code>'
+                + '</div></div>'
+                + '<div class="d-flex gap-2 flex-wrap justify-content-end">'
+                + '<button class="btn btn-sm btn-outline-secondary" onclick="copyHost(' + s.id + ')">'
+                + '<i class="bi bi-clipboard me-1"></i>Copy host</button>'
+                + '<button class="btn btn-sm btn-outline-primary" onclick="manageAccounts(' + s.id + ')">'
+                + '<i class="bi bi-person-badge me-1"></i>Accounts</button>'
+                + '<button class="btn btn-sm btn-outline-primary" onclick="manageWhitelist(' + s.id + ')">'
+                + '<i class="bi bi-shield-check me-1"></i>IP Rules</button>'
+                + '<button class="btn btn-sm btn-outline-warning" onclick="editService(' + s.id + ')">'
+                + '<i class="bi bi-pencil"></i></button>'
+                + '<button class="btn btn-sm btn-outline-danger" onclick="deleteService(' + s.id + ')">'
+                + '<i class="bi bi-trash"></i></button>'
+                + '</div></div>';
+        }).join('');
+    } catch(e) {
+        console.error('Failed to load services:', e);
     }
-
-    container.innerHTML = data.services.map(s => `
-        <div class="service-card">
-            <div class="d-flex align-items-center">
-                <div class="service-icon"><i class="bi bi-hdd-network"></i></div>
-                <div class="service-info">
-                    <h6 class="mb-1">${s.name}</h6>
-                    ${s.description ? `<div class="text-muted small mb-1">${s.description}</div>` : ''}
-                    <code class="small text-secondary">${s.host}</code>
-                </div>
-            </div>
-            <div class="d-flex gap-2 flex-wrap justify-content-end">
-                <button class="btn btn-sm btn-outline-secondary" onclick="copyHost('${s.host}')">
-                    <i class="bi bi-clipboard me-1"></i>Copy host
-                </button>
-                <button class="btn btn-sm btn-outline-primary" onclick="manageAccounts(${s.id},'${s.name}')">
-                    <i class="bi bi-person-badge me-1"></i>Accounts
-                </button>
-                <button class="btn btn-sm btn-outline-primary" onclick="manageWhitelist(${s.id},'${s.name}')">
-                    <i class="bi bi-shield-check me-1"></i>IP Rules
-                </button>
-                <button class="btn btn-sm btn-outline-warning" onclick="editService(${s.id})">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteService(${s.id})">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
 }
 
 // ── Create / Edit Service ──
 function openCreateService() {
     editingSvcId = null;
-    openModal('New SFTP Service', `
-        ${fld('Service Name','svcName','text','My SFTP Server',true)}
-        ${fld('Host / Hostname','svcHost','text','sftp.example.com',true)}
-        <div class="d-flex justify-content-end gap-2 mt-3">
-            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="saveService()">Save</button>
-        </div>
-    `);
+    openModal('New SFTP Service',
+        '<div class="mb-3">'
+        + '<label class="form-label small fw-semibold">Service Name <span class="text-danger">*</span></label>'
+        + '<input class="form-control form-control-sm" type="text" id="svcName" placeholder="e.g. Production Server">'
+        + '<div class="field-error" id="svcName-err"></div>'
+        + '</div>'
+        + '<div class="mb-3">'
+        + '<label class="form-label small fw-semibold">Purpose / Description</label>'
+        + '<textarea class="form-control form-control-sm" id="svcDesc" rows="2" placeholder="e.g. Main production file transfer server"></textarea>'
+        + '</div>'
+        + '<div class="mb-3">'
+        + '<label class="form-label small fw-semibold">SFTP Host</label>'
+        + '<input class="form-control form-control-sm" type="text" value="Auto-assigned on creation" disabled style="color:#6b7280;background:#f9fafb">'
+        + '<div class="form-text">Host is automatically assigned from our server pool.</div>'
+        + '</div>'
+        + '<div class="d-flex justify-content-end gap-2 mt-3">'
+        + '<button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>'
+        + '<button class="btn btn-primary btn-sm" onclick="saveService()">Save</button>'
+        + '</div>'
+    );
 }
 
 async function editService(id) {
@@ -547,12 +559,15 @@ async function deleteService(id) {
     loadServices();
 }
 
-function copyHost(host) {
+function copyHost(id) {
+    const s = (window._svcData||{})[id];
+    const host = s ? s.host : '';
     navigator.clipboard.writeText(host).then(() => alert('Copied: ' + host));
 }
 
 // ── Service Accounts ──
 async function manageAccounts(svcId, svcName) {
+    if (!svcName) { const s=(window._svcData||{})[svcId]; svcName=s?s.name:''; }
     currentSvcId = svcId;
     const rows = await fetch(`/portal/api/services/${svcId}/accounts`).then(r=>r.json()).catch(()=>[]);
     renderAccountsModal(svcName, rows);
@@ -697,6 +712,7 @@ async function backToAccounts() {
 
 // ── IP Whitelist ──
 async function manageWhitelist(svcId, svcName) {
+    if (!svcName) { const s=(window._svcData||{})[svcId]; svcName=s?s.name:''; }
     currentSvcId = svcId;
     const rows = await fetch(`/portal/api/services/${svcId}/whitelist`).then(r=>r.json()).catch(()=>[]);
     renderWhitelistModal(svcName, rows);
@@ -1244,3 +1260,4 @@ init();
 </script>
 </body>
 </html>
+
