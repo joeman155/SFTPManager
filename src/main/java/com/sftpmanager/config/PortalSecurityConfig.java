@@ -26,6 +26,7 @@ public class PortalSecurityConfig {
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/portal/login", "/portal-login.html").permitAll()
+                .requestMatchers("/portal/api/auth/**").permitAll()
                 .requestMatchers("/oauth2/authorization/google-portal", "/login/oauth2/code/google-portal").permitAll()
                 .anyRequest().authenticated()
             )

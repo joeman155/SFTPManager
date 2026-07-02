@@ -70,9 +70,23 @@ public class User {
     @Column(name = "backup_cc_expiry")
     private String backupCcExpiry;
 
+    // Auth type: GOOGLE or EMAIL
+    @Column(name = "auth_type")
+    private String authType = "GOOGLE";
+
+    @Column(name = "password_hash")
+    private String passwordHash;
+
     // Role: 10 = admin, 1 = standard user
     @Column(name = "role", nullable = false)
     private Integer role = 1;
+
+    // Auth type: GOOGLE or EMAIL
+    @Column(name = "auth_type")
+    private String authType = "GOOGLE";
+
+    @Column(name = "password_hash")
+    private String passwordHash;
 
     // Onboarding
     @Column(name = "onboarded", nullable = false)
@@ -145,8 +159,16 @@ public class User {
     public void setBackupCcName(String v) { this.backupCcName = v; }
     public String getBackupCcExpiry() { return backupCcExpiry; }
     public void setBackupCcExpiry(String v) { this.backupCcExpiry = v; }
+    public String getAuthType() { return authType; }
+    public void setAuthType(String v) { this.authType = v; }
+    public String getPasswordHash() { return passwordHash; }
+    public void setPasswordHash(String v) { this.passwordHash = v; }
     public Integer getRole() { return role; }
     public void setRole(Integer v) { this.role = v; }
+    public String getAuthType() { return authType; }
+    public void setAuthType(String v) { this.authType = v; }
+    public String getPasswordHash() { return passwordHash; }
+    public void setPasswordHash(String v) { this.passwordHash = v; }
     public Boolean getOnboarded() { return onboarded; }
     public void setOnboarded(Boolean v) { this.onboarded = v; }
     public LocalDate getTrialExpires() { return trialExpires; }

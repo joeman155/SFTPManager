@@ -8,6 +8,8 @@ import com.sftpmanager.service.EmailService;
 import com.sftpmanager.repository.RuntimeSettingsRepository;
 import com.sftpmanager.repository.*;
 import org.springframework.http.HttpStatus;
+import jakarta.servlet.http.HttpSession;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -61,24 +63,39 @@ public class PortalController {
 
     // ── Me ──
     @GetMapping("/me")
-    public ResponseEntity<?> getMe(@AuthenticationPrincipal OAuth2User principal) {
-        if (principal == null) return ResponseEntity.status(401).build();
+    public ResponseEntity<?> getMe(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
+        // Support both Google OAuth and email/password auth
+        String email, name, picture;
 
-        String email      = principal.getAttribute("email");
-        String name       = principal.getAttribute("name");
-        String picture    = principal.getAttribute("picture");
-        String givenName  = principal.getAttribute("given_name");
-        String familyName = principal.getAttribute("family_name");
+        if (principal != null) {
+            // Google OAuth user
+            email     = principal.getAttribute("email");
+            name      = principal.getAttribute("name");
+            picture   = principal.getAttribute("picture");
+            String givenName  = principal.getAttribute("given_name");
+            String familyName = principal.getAttribute("family_name");
+            final String fe = email, fn = givenName, fl = familyName, fn2 = name;
+            userRepository.findByEmail(email).orElseGet(() -> {
+                User u = new User();
+                u.setEmail(fe);
+                u.setFirstName(fn != null ? fn : (fn2 != null ? fn2 : fe));
+                u.setSurname(fl != null ? fl : "");
+                u.setAuthType("GOOGLE");
+                u.setCreatedBy("google-oauth");
+                u.setLastUpdatedBy("google-oauth");
+                return userRepository.save(u);
+            });
+        } else {
+            // Email/password user — check session
+            String sessionEmail = (String) session.getAttribute("EMAIL_AUTH_USER");
+            if (sessionEmail == null) return ResponseEntity.status(401).build();
+            email   = sessionEmail;
+            name    = null;
+            picture = null;
+        }
 
-        User user = userRepository.findByEmail(email).orElseGet(() -> {
-            User u = new User();
-            u.setEmail(email);
-            u.setFirstName(givenName  != null ? givenName  : (name != null ? name : email));
-            u.setSurname(familyName != null ? familyName : "");
-            u.setCreatedBy("google-oauth");
-            u.setLastUpdatedBy("google-oauth");
-            return userRepository.save(u);
-        });
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) return ResponseEntity.status(401).build();
 
         PortalUser portalUser = portalUserRepository.findByGoogleEmail(email).orElse(new PortalUser());
         boolean isNewUser = portalUser.getId() == null;
