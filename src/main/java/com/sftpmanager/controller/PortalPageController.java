@@ -17,4 +17,16 @@ public class PortalPageController {
     public String login() {
         return "forward:/portal-login.html";
     }
+
+    @GetMapping("/verify-success")
+    public String verifySuccess() { return "forward:/portal-verify.html"; }
+
+    @GetMapping("/verify-expired")
+    public String verifyExpired() { return "forward:/portal-verify.html"; }
+
+    @GetMapping("/verify-invalid")
+    public String verifyInvalid() { return "forward:/portal-verify.html"; }
+
+    @GetMapping("/verify-already")
+    public String verifyAlready() { return "forward:/portal-verify.html"; }
 }

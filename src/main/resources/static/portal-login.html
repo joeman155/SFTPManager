@@ -7,31 +7,27 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet"/>
     <style>
-        body { background: linear-gradient(135deg, #1a1f36 0%, #2d3748 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .login-card { background: #fff; border-radius: 16px; padding: 48px 40px; width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-        .brand { font-size: 1.4rem; font-weight: 700; color: #1a1f36; margin-bottom: 8px; }
-        .subtitle { color: #6b7280; font-size: .95rem; margin-bottom: 36px; }
-        .google-btn { display: flex; align-items: center; justify-content: center; gap: 12px; background: #fff; border: 1.5px solid #e5e7eb; border-radius: 8px; padding: 12px 24px; width: 100%; font-size: .95rem; font-weight: 500; color: #374151; text-decoration: none; transition: all .2s; cursor: pointer; }
-        .google-btn:hover { background: #f9fafb; border-color: #d1d5db; box-shadow: 0 2px 8px rgba(0,0,0,0.08); color: #374151; }
-        .google-icon { width: 20px; height: 20px; }
-        .divider { border-top: 1px solid #e5e7eb; margin: 28px 0; }
-        .error-msg { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 8px; padding: 12px; font-size: .88rem; margin-bottom: 20px; }
-        .footer-note { color: #9ca3af; font-size: .8rem; text-align: center; margin-top: 24px; }
+        body { background:linear-gradient(135deg,#1a1f36 0%,#2d3748 100%); min-height:100vh; display:flex; align-items:center; justify-content:center; }
+        .login-card { background:#fff; border-radius:16px; padding:48px 40px; width:100%; max-width:420px; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+        .brand { font-size:1.4rem; font-weight:700; color:#1a1f36; margin-bottom:6px; }
+        .subtitle { color:#6b7280; font-size:.92rem; margin-bottom:36px; }
+        .google-btn { display:flex; align-items:center; justify-content:center; gap:12px; background:#fff; border:1.5px solid #e5e7eb; border-radius:8px; padding:12px 24px; width:100%; font-size:.95rem; font-weight:500; color:#374151; text-decoration:none; transition:all .2s; }
+        .google-btn:hover { background:#f9fafb; border-color:#d1d5db; box-shadow:0 2px 8px rgba(0,0,0,0.08); color:#374151; }
+        .error-msg { background:#fef2f2; border:1px solid #fecaca; color:#dc2626; border-radius:8px; padding:12px; font-size:.88rem; margin-bottom:20px; display:none; }
+        .footer-note { color:#9ca3af; font-size:.78rem; text-align:center; margin-top:24px; }
     </style>
 </head>
 <body>
-<div class="login-card">
-    <div class="text-center">
-        <div class="brand"><i class="bi bi-cloud-arrow-up me-2"></i>SFTP Manager</div>
-        <div class="subtitle">Sign in to access your SFTP services</div>
-    </div>
+<div class="login-card text-center">
+    <div class="brand"><i class="bi bi-cloud-arrow-up me-2"></i>SFTP Manager</div>
+    <div class="subtitle">Sign in to access your SFTP services</div>
 
-    <div id="error-msg" class="error-msg" style="display:none">
+    <div id="error-msg" class="error-msg">
         <i class="bi bi-exclamation-circle me-2"></i>Sign in failed. Please try again.
     </div>
 
     <a href="/oauth2/authorization/google-portal" class="google-btn">
-        <svg class="google-icon" viewBox="0 0 24 24">
+        <svg width="20" height="20" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -42,7 +38,7 @@
 
     <div class="footer-note">
         By signing in you agree to our terms of service.<br/>
-        Contact your administrator if you don't have an account.
+        New users are set up automatically after sign in.
     </div>
 </div>
 <script>

@@ -20,6 +20,9 @@ public class SftpService {
     @Column(name = "host", nullable = false)
     private String host;
 
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id")
     private User user;
@@ -50,6 +53,8 @@ public class SftpService {
     public void setName(String v) { this.name = v; }
     public String getHost() { return host; }
     public void setHost(String v) { this.host = v; }
+    public String getDescription() { return description; }
+    public void setDescription(String v) { this.description = v; }
     public User getUser() { return user; }
     public void setUser(User v) { this.user = v; }
     public LocalDateTime getCreationDate() { return creationDate; }

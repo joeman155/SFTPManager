@@ -2,6 +2,7 @@ package com.sftpmanager.controller;
 
 import com.sftpmanager.model.*;
 import com.sftpmanager.repository.PlanRepository;
+import com.sftpmanager.service.EmailService;
 import com.sftpmanager.repository.RuntimeSettingsRepository;
 import com.sftpmanager.repository.*;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ public class PortalController {
     private final SftpServiceIpWhitelistRepository whitelistRepository;
     private final PlanRepository planRepository;
     private final RuntimeSettingsRepository runtimeSettingsRepository;
+    private final EmailService emailService;
 
     public PortalController(PortalUserRepository portalUserRepository,
                             UserRepository userRepository,
@@ -32,7 +34,8 @@ public class PortalController {
                             SftpServiceAccountRepository accountRepository,
                             SftpServiceIpWhitelistRepository whitelistRepository,
                             PlanRepository planRepository,
-                            RuntimeSettingsRepository runtimeSettingsRepository) {
+                            RuntimeSettingsRepository runtimeSettingsRepository,
+                            EmailService emailService) {
         this.portalUserRepository = portalUserRepository;
         this.userRepository = userRepository;
         this.sftpServiceRepository = sftpServiceRepository;
@@ -40,6 +43,7 @@ public class PortalController {
         this.whitelistRepository = whitelistRepository;
         this.planRepository = planRepository;
         this.runtimeSettingsRepository = runtimeSettingsRepository;
+        this.emailService = emailService;
     }
 
     // ── Helper: get current User from OAuth principal ──
@@ -97,6 +101,17 @@ public class PortalController {
             .orElse(ResponseEntity.status(401).build());
     }
 
+    @GetMapping("/services/{id}")
+    public ResponseEntity<?> getService(@AuthenticationPrincipal OAuth2User principal,
+                                        @PathVariable Long id) {
+        return currentUser(principal).map(user ->
+            sftpServiceRepository.findById(id)
+                .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.status(403).build())
+        ).orElse(ResponseEntity.status(401).build());
+    }
+
     @PostMapping("/services")
     public ResponseEntity<?> createService(@AuthenticationPrincipal OAuth2User principal,
                                            @RequestBody SftpService service) {
@@ -104,6 +119,12 @@ public class PortalController {
             service.setUser(user);
             service.setCreatedBy(user.getEmail());
             service.setLastUpdatedBy(user.getEmail());
+            // Auto-assign host from runtime settings
+            String host = runtimeSettingsRepository.findByName("sftphost001")
+                .map(s -> s.getValue())
+                .orElse("sftphost001.leederville.net");
+            service.setHost(host);
+            service.setDescription(service.getDescription());
             return ResponseEntity.status(HttpStatus.CREATED).body(sftpServiceRepository.save(service));
         }).orElse(ResponseEntity.status(401).build());
     }
@@ -117,7 +138,7 @@ public class PortalController {
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
                 .map(s -> {
                     s.setName(updated.getName());
-                    s.setHost(updated.getHost());
+                    s.setDescription(updated.getDescription());
                     s.setLastUpdatedBy(user.getEmail());
                     return ResponseEntity.ok(sftpServiceRepository.save(s));
                 })
@@ -339,6 +360,9 @@ public class PortalController {
         user.setOnboarded(true);
         user.setLastUpdatedBy(email);
         userRepository.save(user);
+
+        // Send welcome email
+        emailService.sendWelcomeEmail(email, user.getFirstName());
 
         return ResponseEntity.ok(Map.of("success", true));
     }

@@ -422,7 +422,8 @@ async function loadServices() {
                 <div class="service-icon"><i class="bi bi-hdd-network"></i></div>
                 <div class="service-info">
                     <h6>${s.name}</h6>
-                    <code>${s.host}</code>
+                    ${s.description ? `<div class="text-muted small">${s.description}</div>` : ''}
+                    <code class="small">${s.host}</code>
                 </div>
             </div>
             <div class="d-flex gap-2 flex-wrap justify-content-end">
@@ -435,7 +436,7 @@ async function loadServices() {
                 <button class="btn btn-sm btn-outline-primary" onclick="manageWhitelist(${s.id},'${s.name}')">
                     <i class="bi bi-shield-check me-1"></i>IP Rules
                 </button>
-                <button class="btn btn-sm btn-outline-warning" onclick="editService(${s.id},'${s.name}','${s.host}')">
+                <button class="btn btn-sm btn-outline-warning" onclick="editService(${s.id})">
                     <i class="bi bi-pencil"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteService(${s.id})">
@@ -459,28 +460,45 @@ function openCreateService() {
     `);
 }
 
-function editService(id, name, host) {
+async function editService(id) {
     editingSvcId = id;
+    const svc = await fetch(`/portal/api/services/${id}`).then(r=>r.json());
     openModal('Edit SFTP Service', `
-        ${fld('Service Name','svcName','text','',true)}
-        ${fld('Host / Hostname','svcHost','text','',true)}
+        ${fld('Service Name','svcName','text','e.g. Production Server',true)}
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Purpose / Description</label>
+            <textarea class="form-control form-control-sm" id="svcDesc" rows="2"></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">SFTP Host</label>
+            <input class="form-control form-control-sm" type="text" value="${svc.host||''}" disabled style="color:#6b7280;background:#f9fafb">
+        </div>
         <div class="d-flex justify-content-end gap-2 mt-3">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary btn-sm" onclick="saveService()">Save</button>
         </div>
     `);
-    setVal('svcName', name);
-    setVal('svcHost', host);
+    setVal('svcName', svc.name);
+    setVal('svcDesc', svc.description);
 }
 
 async function saveService() {
     if (!validate([['svcName', V.required], ['svcHost', V.required]])) return;
-    const body = { name: getVal('svcName'), host: getVal('svcHost') };
+    const body = { name: getVal('svcName'), description: getVal('svcDesc') };
     const url = editingSvcId
         ? `/portal/api/services/${editingSvcId}`
         : `/portal/api/services`;
     const r = await fetch(url, { method: editingSvcId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (r.ok) { closeModal(); loadServices(); }
+    if (r.ok) {
+        closeModal();
+        const saved = await r.json();
+        const allSvcs = await fetch('/portal/api/services').then(r=>r.json()).catch(()=>[]);
+        loadServices();
+        // If this is their first service, open accounts modal immediately
+        if (!editingSvcId && allSvcs.services && allSvcs.services.length === 0) {
+            setTimeout(() => manageAccounts(saved.id, saved.name), 500);
+        }
+    }
     else { const e = await r.json(); alert(e.error || 'Save failed'); }
 }
 
