@@ -1219,7 +1219,9 @@ async function submitOnboarding() {
     });
     if (res.ok) {
         document.getElementById('onboarding-overlay').style.display = 'none';
-        loadServices();
+        await loadServices();
+        // Redirect straight to creating their first SFTP service
+        setTimeout(() => openCreateService(), 300);
     } else {
         alert('Something went wrong. Please try again.');
     }
