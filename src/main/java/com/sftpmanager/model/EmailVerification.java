@@ -14,8 +14,8 @@ public class EmailVerification {
     @Column(name = "email", nullable = false)
     private String email;
 
-    @Column(name = "token", nullable = false, unique = true)
-    private String token;
+    @Column(name = "code", nullable = false)
+    private String code;
 
     @Column(name = "verified")
     private Boolean verified = false;
@@ -35,8 +35,8 @@ public class EmailVerification {
     public void setId(Long id) { this.id = id; }
     public String getEmail() { return email; }
     public void setEmail(String v) { this.email = v; }
-    public String getToken() { return token; }
-    public void setToken(String v) { this.token = v; }
+    public String getCode() { return code; }
+    public void setCode(String v) { this.code = v; }
     public Boolean getVerified() { return verified; }
     public void setVerified(Boolean v) { this.verified = v; }
     public LocalDateTime getExpiresAt() { return expiresAt; }

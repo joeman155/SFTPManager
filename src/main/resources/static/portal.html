@@ -52,6 +52,13 @@
         .tc-box { background:#f8f9fa; border:1px solid #e5e7eb; border-radius:8px; padding:16px; max-height:200px; overflow-y:auto; font-size:.88rem; margin-bottom:16px; }
 
 
+
+        .verify-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:4000; display:none; align-items:center; justify-content:center; }
+        .verify-box { background:#fff; border-radius:16px; padding:40px; width:100%; max-width:420px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+        .code-inputs { display:flex; gap:10px; justify-content:center; margin:24px 0; }
+        .code-input { width:48px; height:56px; text-align:center; font-size:1.5rem; font-weight:700; border:2px solid #e5e7eb; border-radius:8px; color:#1a1f36; }
+        .code-input:focus { border-color:#4f46e5; outline:none; }
+        .code-input.filled { border-color:#4f46e5; background:#f5f3ff; }
         .autocomplete-wrapper { position:relative; }
         .autocomplete-dropdown { position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #d1d5db; border-top:none; border-radius:0 0 8px 8px; box-shadow:0 4px 12px rgba(0,0,0,0.1); z-index:9999; max-height:200px; overflow-y:auto; }
         .autocomplete-item { padding:10px 14px; cursor:pointer; font-size:.85rem; border-bottom:1px solid #f3f4f6; line-height:1.4; }
@@ -230,6 +237,36 @@
     </div>
 </div>
 
+<!-- Email Verification Modal -->
+<div class="verify-overlay" id="verify-overlay">
+    <div class="verify-box">
+        <i class="bi bi-envelope-check" style="font-size:2.5rem;color:#4f46e5"></i>
+        <h4 class="fw-bold mt-3">Check your email</h4>
+        <p class="text-muted small" id="verify-subtitle">We sent a 6-digit code to <strong id="verify-email"></strong></p>
+
+        <div class="code-inputs">
+            <input class="code-input" type="text" maxlength="1" id="c0" oninput="codeInput(0)" onkeydown="codeKey(event,0)">
+            <input class="code-input" type="text" maxlength="1" id="c1" oninput="codeInput(1)" onkeydown="codeKey(event,1)">
+            <input class="code-input" type="text" maxlength="1" id="c2" oninput="codeInput(2)" onkeydown="codeKey(event,2)">
+            <input class="code-input" type="text" maxlength="1" id="c3" oninput="codeInput(3)" onkeydown="codeKey(event,3)">
+            <input class="code-input" type="text" maxlength="1" id="c4" oninput="codeInput(4)" onkeydown="codeKey(event,4)">
+            <input class="code-input" type="text" maxlength="1" id="c5" oninput="codeInput(5)" onkeydown="codeKey(event,5)">
+        </div>
+
+        <div class="field-error text-center mb-3" id="verify-err"></div>
+
+        <button class="btn btn-primary w-100" id="verify-btn" onclick="submitCode()">
+            Verify email
+        </button>
+
+        <div class="mt-3">
+            <a href="#" class="text-muted small" onclick="resendCode(event)">
+                Didn't receive it? Resend code
+            </a>
+        </div>
+    </div>
+</div>
+
 <!-- Onboarding Modal -->
 <div class="onboarding-overlay" id="onboarding-overlay" style="display:flex">
     <div id="onboarding-spinner" style="color:#fff;font-size:1.1rem;text-align:center"><i class="bi bi-arrow-clockwise" style="animation:spin 1s linear infinite;display:inline-block;font-size:2rem"></i><div class="mt-2">Loading...</div></div>
@@ -402,6 +439,7 @@ function closeSubModal() {
 
 // ── Load services ──
 async function loadServices() {
+    return new Promise(async (resolve) => {
     const res = await fetch('/portal/api/services');
     const data = await res.json();
     const container = document.getElementById('services-list');
@@ -413,7 +451,7 @@ async function loadServices() {
                 <h6>No SFTP services yet</h6>
                 <p>Click <strong>New SFTP Service</strong> to create your first connection.</p>
             </div>`;
-        return;
+        resolve(); return;
     }
 
     container.innerHTML = data.services.map(s => `
@@ -421,9 +459,9 @@ async function loadServices() {
             <div class="d-flex align-items-center">
                 <div class="service-icon"><i class="bi bi-hdd-network"></i></div>
                 <div class="service-info">
-                    <h6>${s.name}</h6>
-                    ${s.description ? `<div class="text-muted small">${s.description}</div>` : ''}
-                    <code class="small">${s.host}</code>
+                    <h6 class="mb-1">${s.name}</h6>
+                    ${s.description ? `<div class="text-muted small mb-1">${s.description}</div>` : ''}
+                    <code class="small text-secondary">${s.host}</code>
                 </div>
             </div>
             <div class="d-flex gap-2 flex-wrap justify-content-end">
@@ -490,13 +528,13 @@ async function saveService() {
         : `/portal/api/services`;
     const r = await fetch(url, { method: editingSvcId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) {
-        closeModal();
         const saved = await r.json();
-        const allSvcs = await fetch('/portal/api/services').then(r=>r.json()).catch(()=>[]);
-        loadServices();
-        // If this is their first service, open accounts modal immediately
-        if (!editingSvcId && allSvcs.services && allSvcs.services.length === 0) {
-            setTimeout(() => manageAccounts(saved.id, saved.name), 500);
+        const isFirst = !editingSvcId;
+        closeModal();
+        await loadServices();
+        // If new service, open accounts modal immediately
+        if (isFirst) {
+            setTimeout(() => manageAccounts(saved.id, saved.name), 300);
         }
     }
     else { const e = await r.json(); alert(e.error || 'Save failed'); }
@@ -845,6 +883,71 @@ document.addEventListener('click', e => {
     });
 });
 
+
+// ── Email Verification ──
+function codeInput(i) {
+    const el = document.getElementById('c' + i);
+    const val = el.value.replace(/[^0-9]/g,'');
+    el.value = val;
+    el.classList.toggle('filled', val !== '');
+    if (val && i < 5) document.getElementById('c' + (i+1)).focus();
+    // Auto submit when all 6 filled
+    const code = getCode();
+    if (code.length === 6) submitCode();
+}
+
+function codeKey(e, i) {
+    if (e.key === 'Backspace' && !document.getElementById('c'+i).value && i > 0) {
+        document.getElementById('c'+(i-1)).focus();
+    }
+}
+
+function getCode() {
+    return [0,1,2,3,4,5].map(i => document.getElementById('c'+i).value).join('');
+}
+
+async function submitCode() {
+    const code = getCode();
+    if (code.length !== 6) { document.getElementById('verify-err').textContent = 'Please enter all 6 digits.'; return; }
+    const btn = document.getElementById('verify-btn');
+    btn.disabled = true;
+    btn.textContent = 'Verifying...';
+
+    const res = await fetch('/portal/api/verify-code', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+        document.getElementById('verify-overlay').style.display = 'none';
+        // Continue to onboarding check
+        const needed = await checkOnboarding();
+        if (!needed) {
+            document.getElementById('onboarding-overlay').style.display = 'none';
+        }
+        loadServices();
+    } else {
+        document.getElementById('verify-err').textContent = data.error || 'Invalid code. Please try again.';
+        btn.disabled = false;
+        btn.textContent = 'Verify email';
+        // Clear inputs
+        [0,1,2,3,4,5].forEach(i => { const el=document.getElementById('c'+i); el.value=''; el.classList.remove('filled'); });
+        document.getElementById('c0').focus();
+    }
+}
+
+async function resendCode(e) {
+    e.preventDefault();
+    await fetch('/portal/api/resend-code', { method: 'POST' });
+    document.getElementById('verify-subtitle').innerHTML = 'New code sent to <strong id="verify-email">' +
+        document.getElementById('verify-email').textContent + '</strong>';
+    [0,1,2,3,4,5].forEach(i => { const el=document.getElementById('c'+i); el.value=''; el.classList.remove('filled'); });
+    document.getElementById('c0').focus();
+    document.getElementById('verify-err').textContent = '';
+}
+
 // ── Account Panel ──
 async function openAccount(e) {
     e.preventDefault();
@@ -1117,9 +1220,21 @@ async function init() {
         av.src = me.picture; av.style.display = 'block';
     }
 
+    // Check email verification
+    if (!me.emailVerified) {
+        // Show verification modal, block everything else
+        document.getElementById('onboarding-overlay').style.display = 'none';
+        document.getElementById('onboarding-spinner').style.display = 'none';
+        document.getElementById('verify-email').textContent = me.email;
+        document.getElementById('verify-overlay').style.display = 'flex';
+        document.getElementById('c0').focus();
+        // Services load in background (verify modal blocks interaction)
+        loadServices();
+        return;
+    }
+
     const needed = await checkOnboarding();
     if (!needed) {
-        // No onboarding needed - hide overlay entirely
         document.getElementById('onboarding-overlay').style.display = 'none';
     }
     loadServices();

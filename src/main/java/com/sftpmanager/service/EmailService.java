@@ -43,6 +43,23 @@ public class EmailService {
         sendHtml(toEmail, "Verify your SFTP Manager email", html);
     }
 
+    public void sendVerificationCode(String toEmail, String code) {
+        String html = """
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+                <h2 style="color:#1a1f36">Verify your email</h2>
+                <p>Enter this code to confirm your email address:</p>
+                <div style="font-size:2.5rem;font-weight:800;letter-spacing:12px;color:#4f46e5;
+                            background:#f5f3ff;border-radius:12px;padding:20px;text-align:center;
+                            margin:20px 0">%s</div>
+                <p style="color:#6b7280;font-size:.85rem">This code expires in 15 minutes.<br/>
+                If you didn't sign in to SFTP Manager, ignore this email.</p>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+            </div>
+            """.formatted(code);
+        sendHtml(toEmail, "Your SFTP Manager verification code: " + code, html);
+    }
+
     public void sendWelcomeEmail(String toEmail, String firstName) {
         String template = runtimeSettingsRepository.findByName("welcomeemail")
             .map(s -> s.getValue())

@@ -1,7 +1,9 @@
 package com.sftpmanager.controller;
 
 import com.sftpmanager.model.*;
+import com.sftpmanager.repository.EmailVerificationRepository;
 import com.sftpmanager.repository.PlanRepository;
+import com.sftpmanager.model.EmailVerification;
 import com.sftpmanager.service.EmailService;
 import com.sftpmanager.repository.RuntimeSettingsRepository;
 import com.sftpmanager.repository.*;
@@ -27,6 +29,7 @@ public class PortalController {
     private final PlanRepository planRepository;
     private final RuntimeSettingsRepository runtimeSettingsRepository;
     private final EmailService emailService;
+    private final EmailVerificationRepository verificationRepository;
 
     public PortalController(PortalUserRepository portalUserRepository,
                             UserRepository userRepository,
@@ -35,7 +38,8 @@ public class PortalController {
                             SftpServiceIpWhitelistRepository whitelistRepository,
                             PlanRepository planRepository,
                             RuntimeSettingsRepository runtimeSettingsRepository,
-                            EmailService emailService) {
+                            EmailService emailService,
+                            EmailVerificationRepository verificationRepository) {
         this.portalUserRepository = portalUserRepository;
         this.userRepository = userRepository;
         this.sftpServiceRepository = sftpServiceRepository;
@@ -44,6 +48,7 @@ public class PortalController {
         this.planRepository = planRepository;
         this.runtimeSettingsRepository = runtimeSettingsRepository;
         this.emailService = emailService;
+        this.verificationRepository = verificationRepository;
     }
 
     // ── Helper: get current User from OAuth principal ──
@@ -76,17 +81,37 @@ public class PortalController {
         });
 
         PortalUser portalUser = portalUserRepository.findByGoogleEmail(email).orElse(new PortalUser());
+        boolean isNewUser = portalUser.getId() == null;
         portalUser.setGoogleEmail(email);
         portalUser.setGoogleName(name);
         portalUser.setGooglePicture(picture);
         portalUser.setUser(user);
         portalUserRepository.save(portalUser);
 
+        // Check if email is verified
+        boolean emailVerified = verificationRepository
+            .findTopByEmailOrderByCreatedAtDesc(email)
+            .map(EmailVerification::getVerified)
+            .orElse(false);
+
+        // Send verification code if not yet verified
+        if (!emailVerified) {
+            String code = String.format("%06d", (int)(Math.random() * 1000000));
+            EmailVerification ev = new EmailVerification();
+            ev.setEmail(email);
+            ev.setCode(code);
+            ev.setVerified(false);
+            ev.setExpiresAt(java.time.LocalDateTime.now().plusMinutes(15));
+            verificationRepository.save(ev);
+            emailService.sendVerificationCode(email, code);
+        }
+
         return ResponseEntity.ok(Map.of(
-            "email",   email,
-            "name",    name    != null ? name    : "",
-            "picture", picture != null ? picture : "",
-            "userId",  user.getId()
+            "email",         email,
+            "name",          name    != null ? name    : "",
+            "picture",       picture != null ? picture : "",
+            "userId",        user.getId(),
+            "emailVerified", emailVerified
         ));
     }
 
@@ -289,6 +314,48 @@ public class PortalController {
             whitelistRepository.deleteById(id);
             return ResponseEntity.noContent().build();
         }).orElse(ResponseEntity.status(401).build());
+    }
+
+    // ── Email Verification ──
+
+    @PostMapping("/verify-code")
+    public ResponseEntity<?> verifyCode(@AuthenticationPrincipal OAuth2User principal,
+                                        @RequestBody Map<String, Object> body) {
+        if (principal == null) return ResponseEntity.status(401).build();
+        String email = principal.getAttribute("email");
+        String code = (String) body.get("code");
+
+        return verificationRepository.findTopByEmailOrderByCreatedAtDesc(email)
+            .map(ev -> {
+                if (ev.getVerified()) {
+                    return ResponseEntity.ok(Map.of("success", true, "message", "Already verified"));
+                }
+                if (ev.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Code has expired. Please sign in again to get a new code."));
+                }
+                if (!ev.getCode().equals(code != null ? code.trim() : "")) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Incorrect code. Please try again."));
+                }
+                ev.setVerified(true);
+                verificationRepository.save(ev);
+                return ResponseEntity.ok(Map.of("success", true));
+            })
+            .orElse(ResponseEntity.badRequest().body(Map.of("error", "No verification code found. Please sign in again.")));
+    }
+
+    @PostMapping("/resend-code")
+    public ResponseEntity<?> resendCode(@AuthenticationPrincipal OAuth2User principal) {
+        if (principal == null) return ResponseEntity.status(401).build();
+        String email = principal.getAttribute("email");
+        String code = String.format("%06d", (int)(Math.random() * 1000000));
+        EmailVerification ev = new EmailVerification();
+        ev.setEmail(email);
+        ev.setCode(code);
+        ev.setVerified(false);
+        ev.setExpiresAt(java.time.LocalDateTime.now().plusMinutes(15));
+        verificationRepository.save(ev);
+        emailService.sendVerificationCode(email, code);
+        return ResponseEntity.ok(Map.of("success", true));
     }
 
     // ── Onboarding ──
