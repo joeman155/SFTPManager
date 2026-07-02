@@ -2,6 +2,7 @@ package com.sftpmanager.service;
 
 import com.sftpmanager.repository.RuntimeSettingsRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,7 @@ public class EmailService {
         sendHtml(toEmail, "Verify your SFTP Manager email", html);
     }
 
+    @Async
     public void sendVerificationCode(String toEmail, String code) {
         String html = """
             <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
@@ -60,6 +62,7 @@ public class EmailService {
         sendHtml(toEmail, "Your SFTP Manager verification code: " + code, html);
     }
 
+    @Async
     public void sendWelcomeEmail(String toEmail, String firstName) {
         String template = runtimeSettingsRepository.findByName("welcomeemail")
             .map(s -> s.getValue())
@@ -104,3 +107,4 @@ public class EmailService {
             """.formatted(baseUrl);
     }
 }
+

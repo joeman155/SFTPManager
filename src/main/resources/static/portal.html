@@ -1229,20 +1229,9 @@ async function submitOnboarding() {
 
 // ── Init ──
 async function init() {
-    // Step 1: Show verify screen immediately — before any API calls
-    // We check localStorage to see if this session already showed the verify screen
-    // If not, show it right away so there is zero delay for the user
-    const sessionKey = 'sftp_verify_shown';
+    // Keep the spinner overlay visible while we check status
+    // Do NOT show the verify screen yet — wait until we know it's needed
 
-    // Show the verify screen instantly while we fetch user data in the background
-    // The email address will be filled in once /me returns
-    document.getElementById('verify-subtitle').innerHTML =
-        'A 6-digit verification code is being sent to your email — it should arrive shortly.';
-    document.getElementById('onboarding-overlay').style.display = 'none';
-    document.getElementById('onboarding-spinner').style.display = 'none';
-    document.getElementById('verify-overlay').style.display = 'flex';
-
-    // Step 2: Fetch user data (this also triggers the email send on the backend)
     const res = await fetch('/portal/api/me');
     if (res.status === 401) { window.location.href = '/portal/login'; return; }
     const me = await res.json();
@@ -1253,17 +1242,19 @@ async function init() {
         av.src = me.picture; av.style.display = 'block';
     }
 
-    // Step 3: Now we know if verification is needed
     if (!me.emailVerified) {
-        // Update subtitle with actual email address
+        // Only NOW show the verify screen — we know it's needed
+        document.getElementById('onboarding-overlay').style.display = 'none';
+        document.getElementById('onboarding-spinner').style.display = 'none';
         document.getElementById('verify-subtitle').innerHTML =
             'A 6-digit code is being sent to <strong>' + me.email + '</strong> — it should arrive shortly.';
+        document.getElementById('verify-overlay').style.display = 'flex';
         document.getElementById('c0').focus();
         loadServices();
         return;
     }
 
-    // Already verified — hide verify screen and continue
+    // Already verified — never show the verify screen at all
     document.getElementById('verify-overlay').style.display = 'none';
 
     const needed = await checkOnboarding();
