@@ -53,13 +53,26 @@ public class PortalController {
         this.verificationRepository = verificationRepository;
     }
 
-    // ── Helper: get current User from OAuth principal ──
-    private Optional<User> currentUser(OAuth2User principal) {
-        if (principal == null) return Optional.empty();
-        String email = principal.getAttribute("email");
-        return portalUserRepository.findByGoogleEmail(email)
-                .map(PortalUser::getUser);
+    // ── Helper: resolve email from OAuth2 or email session ──
+    private String resolveEmail(OAuth2User principal, HttpSession session) {
+        if (principal != null) {
+            return principal.getAttribute("email");
+        }
+        if (session != null) {
+            return (String) session.getAttribute("EMAIL_AUTH_USER");
+        }
+        return null;
     }
+
+    // ── Helper: get current User from OAuth principal or email session ──
+    private Optional<User> currentUser(OAuth2User principal, HttpSession session) {
+        String email = resolveEmail(principal, session);
+        if (email == null) return Optional.empty();
+        return userRepository.findByEmail(email);
+    }
+
+    // Keep old signature for backward compat with portalUser helper
+
 
     // ── Me ──
     @GetMapping("/me")
@@ -134,8 +147,8 @@ public class PortalController {
 
     // ── Services ──
     @GetMapping("/services")
-    public ResponseEntity<?> getServices(@AuthenticationPrincipal OAuth2User principal) {
-        return currentUser(principal)
+    public ResponseEntity<?> getServices(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
+        return currentUser(principal, session)
             .map(user -> ResponseEntity.ok(Map.of(
                 "linked", true,
                 "services", sftpServiceRepository.findByUserId(user.getId())
@@ -146,7 +159,7 @@ public class PortalController {
     @GetMapping("/services/{id}")
     public ResponseEntity<?> getService(@AuthenticationPrincipal OAuth2User principal,
                                         @PathVariable Long id) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(id)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
                 .map(ResponseEntity::ok)
@@ -157,7 +170,7 @@ public class PortalController {
     @PostMapping("/services")
     public ResponseEntity<?> createService(@AuthenticationPrincipal OAuth2User principal,
                                            @RequestBody SftpService service) {
-        return currentUser(principal).map(user -> {
+        return currentUser(principal, session).map(user -> {
             service.setUser(user);
             service.setCreatedBy(user.getEmail());
             service.setLastUpdatedBy(user.getEmail());
@@ -175,7 +188,7 @@ public class PortalController {
     public ResponseEntity<?> updateService(@AuthenticationPrincipal OAuth2User principal,
                                            @PathVariable Long id,
                                            @RequestBody SftpService updated) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(id)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
                 .map(s -> {
@@ -191,7 +204,7 @@ public class PortalController {
     @DeleteMapping("/services/{id}")
     public ResponseEntity<?> deleteService(@AuthenticationPrincipal OAuth2User principal,
                                            @PathVariable Long id) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(id)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
                 .map(s -> { sftpServiceRepository.delete(s); return ResponseEntity.noContent().build(); })
@@ -203,7 +216,7 @@ public class PortalController {
     @GetMapping("/services/{svcId}/accounts")
     public ResponseEntity<?> getAccounts(@AuthenticationPrincipal OAuth2User principal,
                                          @PathVariable Long svcId) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
                 .map(s -> ResponseEntity.ok(accountRepository.findBySftpServiceId(svcId)))
@@ -215,7 +228,7 @@ public class PortalController {
     public ResponseEntity<?> createAccount(@AuthenticationPrincipal OAuth2User principal,
                                            @PathVariable Long svcId,
                                            @RequestBody SftpServiceAccount account) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
                 .map(s -> {
@@ -233,7 +246,7 @@ public class PortalController {
                                            @PathVariable Long svcId,
                                            @PathVariable Long id,
                                            @RequestBody SftpServiceAccount updated) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             accountRepository.findById(id)
                 .filter(a -> a.getSftpService() != null && a.getSftpService().getId().equals(svcId))
                 .map(a -> {
@@ -252,7 +265,7 @@ public class PortalController {
     @GetMapping("/accounts/{id}")
     public ResponseEntity<?> getAccount(@AuthenticationPrincipal OAuth2User principal,
                                         @PathVariable Long id) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             accountRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build())
@@ -262,7 +275,7 @@ public class PortalController {
     @DeleteMapping("/accounts/{id}")
     public ResponseEntity<?> deleteAccount(@AuthenticationPrincipal OAuth2User principal,
                                            @PathVariable Long id) {
-        return currentUser(principal).map(user -> {
+        return currentUser(principal, session).map(user -> {
             accountRepository.deleteById(id);
             return ResponseEntity.noContent().build();
         }).orElse(ResponseEntity.status(401).build());
@@ -272,7 +285,7 @@ public class PortalController {
     @GetMapping("/services/{svcId}/whitelist")
     public ResponseEntity<?> getWhitelist(@AuthenticationPrincipal OAuth2User principal,
                                           @PathVariable Long svcId) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
                 .map(s -> ResponseEntity.ok(whitelistRepository.findBySftpServiceId(svcId)))
@@ -284,7 +297,7 @@ public class PortalController {
     public ResponseEntity<?> createWhitelist(@AuthenticationPrincipal OAuth2User principal,
                                              @PathVariable Long svcId,
                                              @RequestBody SftpServiceIpWhitelist entry) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
                 .map(s -> {
@@ -302,7 +315,7 @@ public class PortalController {
                                              @PathVariable Long svcId,
                                              @PathVariable Long id,
                                              @RequestBody SftpServiceIpWhitelist updated) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             whitelistRepository.findById(id)
                 .map(e -> {
                     e.setIpAddress(updated.getIpAddress());
@@ -317,7 +330,7 @@ public class PortalController {
     @GetMapping("/whitelist/{id}")
     public ResponseEntity<?> getWhitelistEntry(@AuthenticationPrincipal OAuth2User principal,
                                                @PathVariable Long id) {
-        return currentUser(principal).map(user ->
+        return currentUser(principal, session).map(user ->
             whitelistRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build())
@@ -327,7 +340,7 @@ public class PortalController {
     @DeleteMapping("/whitelist/{id}")
     public ResponseEntity<?> deleteWhitelist(@AuthenticationPrincipal OAuth2User principal,
                                              @PathVariable Long id) {
-        return currentUser(principal).map(user -> {
+        return currentUser(principal, session).map(user -> {
             whitelistRepository.deleteById(id);
             return ResponseEntity.noContent().build();
         }).orElse(ResponseEntity.status(401).build());
@@ -338,8 +351,9 @@ public class PortalController {
     @PostMapping("/verify-code")
     public ResponseEntity<?> verifyCode(@AuthenticationPrincipal OAuth2User principal,
                                         @RequestBody Map<String, Object> body) {
-        if (principal == null) return ResponseEntity.status(401).build();
-        String email = principal.getAttribute("email");
+        String _email = resolveEmail(principal, session);
+        if (_email == null) return ResponseEntity.status(401).build();
+        String email = _email;
         String code = (String) body.get("code");
 
         return verificationRepository.findTopByEmailOrderByCreatedAtDesc(email)
@@ -361,9 +375,10 @@ public class PortalController {
     }
 
     @PostMapping("/resend-code")
-    public ResponseEntity<?> resendCode(@AuthenticationPrincipal OAuth2User principal) {
-        if (principal == null) return ResponseEntity.status(401).build();
-        String email = principal.getAttribute("email");
+    public ResponseEntity<?> resendCode(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
+        String _email = resolveEmail(principal, session);
+        if (_email == null) return ResponseEntity.status(401).build();
+        String email = _email;
         String code = String.format("%06d", (int)(Math.random() * 1000000));
         EmailVerification ev = new EmailVerification();
         ev.setEmail(email);
@@ -378,9 +393,10 @@ public class PortalController {
     // ── Onboarding ──
 
     @GetMapping("/onboarding")
-    public ResponseEntity<?> getOnboardingData(@AuthenticationPrincipal OAuth2User principal) {
-        if (principal == null) return ResponseEntity.status(401).build();
-        String email = principal.getAttribute("email");
+    public ResponseEntity<?> getOnboardingData(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
+        String _email = resolveEmail(principal, session);
+        if (_email == null) return ResponseEntity.status(401).build();
+        String email = _email;
 
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) return ResponseEntity.status(404).build();
@@ -408,8 +424,9 @@ public class PortalController {
     @PostMapping("/onboarding")
     public ResponseEntity<?> completeOnboarding(@AuthenticationPrincipal OAuth2User principal,
                                                 @RequestBody Map<String, Object> body) {
-        if (principal == null) return ResponseEntity.status(401).build();
-        String email = principal.getAttribute("email");
+        String _email = resolveEmail(principal, session);
+        if (_email == null) return ResponseEntity.status(401).build();
+        String email = _email;
 
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) return ResponseEntity.status(404).build();
@@ -454,9 +471,10 @@ public class PortalController {
     // ── Account ──
 
     @GetMapping("/account")
-    public ResponseEntity<?> getAccount(@AuthenticationPrincipal OAuth2User principal) {
-        if (principal == null) return ResponseEntity.status(401).build();
-        String email = principal.getAttribute("email");
+    public ResponseEntity<?> getAccount(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
+        String _email = resolveEmail(principal, session);
+        if (_email == null) return ResponseEntity.status(401).build();
+        String email = _email;
         return userRepository.findByEmail(email)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
@@ -465,8 +483,9 @@ public class PortalController {
     @PutMapping("/account")
     public ResponseEntity<?> updateAccount(@AuthenticationPrincipal OAuth2User principal,
                                            @RequestBody Map<String, Object> body) {
-        if (principal == null) return ResponseEntity.status(401).build();
-        String email = principal.getAttribute("email");
+        String _email = resolveEmail(principal, session);
+        if (_email == null) return ResponseEntity.status(401).build();
+        String email = _email;
 
         return userRepository.findByEmail(email).map(user -> {
             if (body.get("firstName")   != null) user.setFirstName((String) body.get("firstName"));
