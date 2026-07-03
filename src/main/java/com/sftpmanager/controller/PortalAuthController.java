@@ -31,6 +31,14 @@ public class PortalAuthController {
         this.emailService = emailService;
     }
 
+    @PostMapping("/check-email")
+    public ResponseEntity<?> checkEmail(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        if (email == null) return ResponseEntity.badRequest().build();
+        boolean exists = userRepository.findByEmail(email.trim().toLowerCase()).isPresent();
+        return ResponseEntity.ok(Map.of("newUser", !exists));
+    }
+
     @PostMapping("/email-signin")
     public ResponseEntity<?> emailSignIn(@RequestBody Map<String, String> body,
                                          HttpSession session) {
@@ -63,10 +71,15 @@ public class PortalAuthController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Password must be at least 8 characters"));
             }
             final String finalEmail = email;
+            String firstName = body.getOrDefault("firstName", "");
+            String surname   = body.getOrDefault("surname", "");
+            if (firstName.isBlank() || surname.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "First name and surname are required"));
+            }
             User user = new User();
             user.setEmail(finalEmail);
-            user.setFirstName("");
-            user.setSurname("");
+            user.setFirstName(firstName.trim());
+            user.setSurname(surname.trim());
             user.setAuthType("EMAIL");
             user.setPasswordHash(passwordEncoder.encode(password));
             user.setCreatedBy("email-signup");
@@ -103,3 +116,4 @@ public class PortalAuthController {
         return ResponseEntity.ok(Map.of("authenticated", false));
     }
 }
+

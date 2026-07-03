@@ -49,7 +49,7 @@
     <div class="text-start">
         <div class="mb-3">
             <label class="form-label small fw-semibold">Email address</label>
-            <input class="form-control form-control-sm" type="email" id="email" placeholder="you@example.com" autocomplete="email">
+            <input class="form-control form-control-sm" type="email" id="email" placeholder="you@example.com" autocomplete="email" oninput="checkNewUser()">
             <div class="field-error" id="email-err"></div>
         </div>
         <div class="mb-3">
@@ -61,8 +61,21 @@
                 </button>
             </div>
             <div class="field-error" id="password-err"></div>
-            <div class="form-text">New to SFTP Manager? Just enter your email and choose a password to create an account.</div>
         </div>
+        <!-- Name fields - shown when creating a new account -->
+        <div id="name-fields" style="display:none">
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">First Name</label>
+                <input class="form-control form-control-sm" type="text" id="firstName" placeholder="Jane" autocomplete="given-name">
+                <div class="field-error" id="firstName-err"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">Surname</label>
+                <input class="form-control form-control-sm" type="text" id="surname" placeholder="Smith" autocomplete="family-name">
+                <div class="field-error" id="surname-err"></div>
+            </div>
+        </div>
+        <div class="form-text mb-3" id="form-hint">New to SFTP Manager? Enter your email and we'll check if you have an account.</div>
         <button class="btn btn-primary w-100 btn-sm" id="signin-btn" onclick="emailSignIn()">
             <i class="bi bi-box-arrow-in-right me-2"></i>Sign in / Create account
         </button>
@@ -100,9 +113,42 @@ function showErr(id, msg) {
     if (input) input.classList.toggle('is-invalid', !!msg);
 }
 
+let isNewUser = false;
+let checkTimer = null;
+
+async function checkNewUser() {
+    const email = document.getElementById('email').value.trim();
+    clearTimeout(checkTimer);
+    if (!email.includes('@')) return;
+    checkTimer = setTimeout(async () => {
+        try {
+            const res = await fetch('/portal/api/auth/check-email', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            isNewUser = data.newUser;
+            const nameFields = document.getElementById('name-fields');
+            const hint = document.getElementById('form-hint');
+            if (isNewUser) {
+                nameFields.style.display = 'block';
+		hint.textContent = "Looks like you're new! Fill in your details to create an account.";
+                document.getElementById('signin-btn').innerHTML = '<i class="bi bi-person-plus me-2"></i>Create account';
+            } else {
+                nameFields.style.display = 'none';
+                hint.textContent = 'Welcome back! Enter your password to sign in.';
+                document.getElementById('signin-btn').innerHTML = '<i class="bi bi-box-arrow-in-right me-2"></i>Sign in';
+            }
+        } catch(e) {}
+    }, 500);
+}
+
 async function emailSignIn() {
-    const email    = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
+    const email     = document.getElementById('email').value.trim();
+    const password  = document.getElementById('password').value;
+    const firstName = document.getElementById('firstName').value.trim();
+    const surname   = document.getElementById('surname').value.trim();
     let valid = true;
 
     if (!email || !email.includes('@')) {
@@ -112,6 +158,13 @@ async function emailSignIn() {
     if (!password || password.length < 8) {
         showErr('password-err', 'Password must be at least 8 characters'); valid = false;
     } else showErr('password-err', null);
+
+    if (isNewUser) {
+        if (!firstName) { showErr('firstName-err', 'First name is required'); valid = false; }
+        else showErr('firstName-err', null);
+        if (!surname) { showErr('surname-err', 'Surname is required'); valid = false; }
+        else showErr('surname-err', null);
+    }
 
     if (!valid) return;
 
@@ -123,12 +176,11 @@ async function emailSignIn() {
         const res = await fetch('/portal/api/auth/email-signin', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ email, password, firstName, surname })
         });
         const data = await res.json();
 
         if (res.ok && data.success) {
-            // Redirect to portal — session is set, portal will show verify screen
             window.location.href = '/portal';
         } else {
             showAlert('<i class="bi bi-exclamation-circle me-2"></i>' + (data.error || 'Sign in failed. Please try again.'), 'error');
@@ -137,7 +189,9 @@ async function emailSignIn() {
         showAlert('Network error. Please try again.', 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-box-arrow-in-right me-2"></i>Sign in / Create account';
+        btn.innerHTML = isNewUser
+            ? '<i class="bi bi-person-plus me-2"></i>Create account'
+            : '<i class="bi bi-box-arrow-in-right me-2"></i>Sign in';
     }
 }
 
@@ -152,3 +206,4 @@ if (window.location.search.includes('error=true')) {
 </script>
 </body>
 </html>
+

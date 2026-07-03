@@ -81,13 +81,6 @@ public class User {
     @Column(name = "role", nullable = false)
     private Integer role = 1;
 
-    // Auth type: GOOGLE or EMAIL
-    @Column(name = "auth_type")
-    private String authType = "GOOGLE";
-
-    @Column(name = "password_hash")
-    private String passwordHash;
-
     // Onboarding
     @Column(name = "onboarded", nullable = false)
     private Boolean onboarded = false;
@@ -165,10 +158,6 @@ public class User {
     public void setPasswordHash(String v) { this.passwordHash = v; }
     public Integer getRole() { return role; }
     public void setRole(Integer v) { this.role = v; }
-    public String getAuthType() { return authType; }
-    public void setAuthType(String v) { this.authType = v; }
-    public String getPasswordHash() { return passwordHash; }
-    public void setPasswordHash(String v) { this.passwordHash = v; }
     public Boolean getOnboarded() { return onboarded; }
     public void setOnboarded(Boolean v) { this.onboarded = v; }
     public LocalDate getTrialExpires() { return trialExpires; }
@@ -186,3 +175,4 @@ public class User {
     public String getLastUpdatedBy() { return lastUpdatedBy; }
     public void setLastUpdatedBy(String v) { this.lastUpdatedBy = v; }
 }
+
