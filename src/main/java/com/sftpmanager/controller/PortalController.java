@@ -158,7 +158,8 @@ public class PortalController {
 
     @GetMapping("/services/{id}")
     public ResponseEntity<?> getService(@AuthenticationPrincipal OAuth2User principal,
-                                        @PathVariable Long id) {
+                                        @PathVariable Long id,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(id)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
@@ -169,7 +170,8 @@ public class PortalController {
 
     @PostMapping("/services")
     public ResponseEntity<?> createService(@AuthenticationPrincipal OAuth2User principal,
-                                           @RequestBody SftpService service) {
+                                           @RequestBody SftpService service,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user -> {
             service.setUser(user);
             service.setCreatedBy(user.getEmail());
@@ -187,7 +189,8 @@ public class PortalController {
     @PutMapping("/services/{id}")
     public ResponseEntity<?> updateService(@AuthenticationPrincipal OAuth2User principal,
                                            @PathVariable Long id,
-                                           @RequestBody SftpService updated) {
+                                           @RequestBody SftpService updated,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(id)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
@@ -203,7 +206,8 @@ public class PortalController {
 
     @DeleteMapping("/services/{id}")
     public ResponseEntity<?> deleteService(@AuthenticationPrincipal OAuth2User principal,
-                                           @PathVariable Long id) {
+                                           @PathVariable Long id,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(id)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
@@ -215,7 +219,8 @@ public class PortalController {
     // ── Service Accounts ──
     @GetMapping("/services/{svcId}/accounts")
     public ResponseEntity<?> getAccounts(@AuthenticationPrincipal OAuth2User principal,
-                                         @PathVariable Long svcId) {
+                                         @PathVariable Long svcId,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
@@ -227,7 +232,8 @@ public class PortalController {
     @PostMapping("/services/{svcId}/accounts")
     public ResponseEntity<?> createAccount(@AuthenticationPrincipal OAuth2User principal,
                                            @PathVariable Long svcId,
-                                           @RequestBody SftpServiceAccount account) {
+                                           @RequestBody SftpServiceAccount account,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
@@ -245,7 +251,8 @@ public class PortalController {
     public ResponseEntity<?> updateAccount(@AuthenticationPrincipal OAuth2User principal,
                                            @PathVariable Long svcId,
                                            @PathVariable Long id,
-                                           @RequestBody SftpServiceAccount updated) {
+                                           @RequestBody SftpServiceAccount updated,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             accountRepository.findById(id)
                 .filter(a -> a.getSftpService() != null && a.getSftpService().getId().equals(svcId))
@@ -264,7 +271,8 @@ public class PortalController {
 
     @GetMapping("/accounts/{id}")
     public ResponseEntity<?> getAccount(@AuthenticationPrincipal OAuth2User principal,
-                                        @PathVariable Long id) {
+                                        @PathVariable Long id,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             accountRepository.findById(id)
                 .map(ResponseEntity::ok)
@@ -274,7 +282,8 @@ public class PortalController {
 
     @DeleteMapping("/accounts/{id}")
     public ResponseEntity<?> deleteAccount(@AuthenticationPrincipal OAuth2User principal,
-                                           @PathVariable Long id) {
+                                           @PathVariable Long id,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user -> {
             accountRepository.deleteById(id);
             return ResponseEntity.noContent().build();
@@ -284,7 +293,8 @@ public class PortalController {
     // ── IP Whitelist ──
     @GetMapping("/services/{svcId}/whitelist")
     public ResponseEntity<?> getWhitelist(@AuthenticationPrincipal OAuth2User principal,
-                                          @PathVariable Long svcId) {
+                                          @PathVariable Long svcId,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
@@ -296,7 +306,8 @@ public class PortalController {
     @PostMapping("/services/{svcId}/whitelist")
     public ResponseEntity<?> createWhitelist(@AuthenticationPrincipal OAuth2User principal,
                                              @PathVariable Long svcId,
-                                             @RequestBody SftpServiceIpWhitelist entry) {
+                                             @RequestBody SftpServiceIpWhitelist entry,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
@@ -314,7 +325,8 @@ public class PortalController {
     public ResponseEntity<?> updateWhitelist(@AuthenticationPrincipal OAuth2User principal,
                                              @PathVariable Long svcId,
                                              @PathVariable Long id,
-                                             @RequestBody SftpServiceIpWhitelist updated) {
+                                             @RequestBody SftpServiceIpWhitelist updated,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             whitelistRepository.findById(id)
                 .map(e -> {
@@ -329,7 +341,8 @@ public class PortalController {
 
     @GetMapping("/whitelist/{id}")
     public ResponseEntity<?> getWhitelistEntry(@AuthenticationPrincipal OAuth2User principal,
-                                               @PathVariable Long id) {
+                                               @PathVariable Long id,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user ->
             whitelistRepository.findById(id)
                 .map(ResponseEntity::ok)
@@ -339,7 +352,8 @@ public class PortalController {
 
     @DeleteMapping("/whitelist/{id}")
     public ResponseEntity<?> deleteWhitelist(@AuthenticationPrincipal OAuth2User principal,
-                                             @PathVariable Long id) {
+                                             @PathVariable Long id,
+                                           HttpSession session) {
         return currentUser(principal, session).map(user -> {
             whitelistRepository.deleteById(id);
             return ResponseEntity.noContent().build();
@@ -350,7 +364,8 @@ public class PortalController {
 
     @PostMapping("/verify-code")
     public ResponseEntity<?> verifyCode(@AuthenticationPrincipal OAuth2User principal,
-                                        @RequestBody Map<String, Object> body) {
+                                        @RequestBody Map<String, Object> body,
+                                           HttpSession session) {
         String _email = resolveEmail(principal, session);
         if (_email == null) return ResponseEntity.status(401).build();
         String email = _email;
@@ -423,7 +438,8 @@ public class PortalController {
 
     @PostMapping("/onboarding")
     public ResponseEntity<?> completeOnboarding(@AuthenticationPrincipal OAuth2User principal,
-                                                @RequestBody Map<String, Object> body) {
+                                                @RequestBody Map<String, Object> body,
+                                           HttpSession session) {
         String _email = resolveEmail(principal, session);
         if (_email == null) return ResponseEntity.status(401).build();
         String email = _email;
@@ -482,7 +498,8 @@ public class PortalController {
 
     @PutMapping("/account")
     public ResponseEntity<?> updateAccount(@AuthenticationPrincipal OAuth2User principal,
-                                           @RequestBody Map<String, Object> body) {
+                                           @RequestBody Map<String, Object> body,
+                                           HttpSession session) {
         String _email = resolveEmail(principal, session);
         if (_email == null) return ResponseEntity.status(401).build();
         String email = _email;
