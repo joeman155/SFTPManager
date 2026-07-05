@@ -24,7 +24,7 @@
         .pw-toggle .eye { position:absolute; right:12px; top:50%; transform:translateY(-50%); cursor:pointer; color:#9ca3af; border:none; background:none; padding:0; }
         .field-error { color:#dc2626; font-size:.78rem; margin-top:3px; }
     </style>
-    <script src="https://www.google.com/recaptcha/api.js?render=YOUR_RECAPTCHA_SITE_KEY"></script>
+    <script src="https://www.google.com/recaptcha/api.js?render=6LfF2kUtAAAAABh-YoQdmybtgGBv0MWM1p1tfDmC"></script>
 </head>
 <body>
 <div class="login-card text-center">
@@ -181,7 +181,7 @@ async function emailSignIn() {
         if (isNewUser && typeof grecaptcha !== 'undefined') {
             captchaToken = await new Promise((resolve) => {
                 grecaptcha.ready(() => {
-                    grecaptcha.execute('YOUR_RECAPTCHA_SITE_KEY', {action: 'signup'})
+                    grecaptcha.execute('6LfF2kUtAAAAABh-YoQdmybtgGBv0MWM1p1tfDmC', {action: 'signup'})
                         .then(resolve);
                 });
             });
