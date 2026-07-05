@@ -24,6 +24,7 @@
         .pw-toggle .eye { position:absolute; right:12px; top:50%; transform:translateY(-50%); cursor:pointer; color:#9ca3af; border:none; background:none; padding:0; }
         .field-error { color:#dc2626; font-size:.78rem; margin-top:3px; }
     </style>
+    <script src="https://www.google.com/recaptcha/api.js?render=YOUR_RECAPTCHA_SITE_KEY"></script>
 </head>
 <body>
 <div class="login-card text-center">
@@ -133,10 +134,12 @@ async function checkNewUser() {
             const hint = document.getElementById('form-hint');
             if (isNewUser) {
                 nameFields.style.display = 'block';
-		hint.textContent = "Looks like you're new! Fill in your details to create an account.";
+
+                hint.textContent = "Looks like you're new! Fill in your details to create an account.";
                 document.getElementById('signin-btn').innerHTML = '<i class="bi bi-person-plus me-2"></i>Create account';
             } else {
                 nameFields.style.display = 'none';
+
                 hint.textContent = 'Welcome back! Enter your password to sign in.';
                 document.getElementById('signin-btn').innerHTML = '<i class="bi bi-box-arrow-in-right me-2"></i>Sign in';
             }
@@ -173,10 +176,21 @@ async function emailSignIn() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Please wait...';
 
     try {
+        // Get reCAPTCHA v3 token (invisible, always runs)
+        let captchaToken = '';
+        if (isNewUser && typeof grecaptcha !== 'undefined') {
+            captchaToken = await new Promise((resolve) => {
+                grecaptcha.ready(() => {
+                    grecaptcha.execute('YOUR_RECAPTCHA_SITE_KEY', {action: 'signup'})
+                        .then(resolve);
+                });
+            });
+        }
+
         const res = await fetch('/portal/api/auth/email-signin', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ email, password, firstName, surname })
+            body: JSON.stringify({ email, password, firstName, surname, captchaToken })
         });
         const data = await res.json();
 
@@ -206,4 +220,3 @@ if (window.location.search.includes('error=true')) {
 </script>
 </body>
 </html>
-

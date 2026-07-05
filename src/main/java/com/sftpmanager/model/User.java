@@ -85,6 +85,15 @@ public class User {
     @Column(name = "onboarded", nullable = false)
     private Boolean onboarded = false;
 
+    @Column(name = "services_deactivated", nullable = false)
+    private Boolean servicesDeactivated = false;
+
+    @Column(name = "locked", nullable = false)
+    private Boolean locked = false;
+
+    @Column(name = "failed_login_attempts")
+    private Integer failedLoginAttempts = 0;
+
     @Column(name = "trial_expires")
     private LocalDate trialExpires;
 
@@ -160,6 +169,12 @@ public class User {
     public void setRole(Integer v) { this.role = v; }
     public Boolean getOnboarded() { return onboarded; }
     public void setOnboarded(Boolean v) { this.onboarded = v; }
+    public Boolean getServicesDeactivated() { return servicesDeactivated; }
+    public void setServicesDeactivated(Boolean v) { this.servicesDeactivated = v; }
+    public Boolean getLocked() { return locked; }
+    public void setLocked(Boolean v) { this.locked = v; }
+    public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
+    public void setFailedLoginAttempts(Integer v) { this.failedLoginAttempts = v; }
     public LocalDate getTrialExpires() { return trialExpires; }
     public void setTrialExpires(LocalDate v) { this.trialExpires = v; }
     public Plan getPlan() { return plan; }
@@ -175,4 +190,3 @@ public class User {
     public String getLastUpdatedBy() { return lastUpdatedBy; }
     public void setLastUpdatedBy(String v) { this.lastUpdatedBy = v; }
 }
-

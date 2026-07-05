@@ -17,8 +17,12 @@ public class SftpServiceAccount {
     private String authenticationType;
 
     @NotBlank(message = "Username is required")
+    @Pattern(regexp = "^[a-zA-Z0-9]+$", message = "Username must be alphanumeric with no spaces")
     @Column(name = "username", nullable = false)
     private String username;
+
+    @Column(name = "email")
+    private String email;
 
     @Column(name = "password")
     private String password;
@@ -28,6 +32,10 @@ public class SftpServiceAccount {
 
     @Column(name = "enabled")
     private Boolean enabled = true;
+
+    // Permissions stored as comma-separated: READ,WRITE,DELETE
+    @Column(name = "permissions")
+    private String permissions;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "sftp_service_id", nullable = false)
@@ -59,12 +67,16 @@ public class SftpServiceAccount {
     public void setAuthenticationType(String v) { this.authenticationType = v; }
     public String getUsername() { return username; }
     public void setUsername(String v) { this.username = v; }
+    public String getEmail() { return email; }
+    public void setEmail(String v) { this.email = v; }
     public String getPassword() { return password; }
     public void setPassword(String v) { this.password = v; }
     public String getPublicKey() { return publicKey; }
     public void setPublicKey(String v) { this.publicKey = v; }
     public Boolean getEnabled() { return enabled; }
     public void setEnabled(Boolean v) { this.enabled = v; }
+    public String getPermissions() { return permissions; }
+    public void setPermissions(String v) { this.permissions = v; }
     public SftpService getSftpService() { return sftpService; }
     public void setSftpService(SftpService v) { this.sftpService = v; }
     public LocalDateTime getCreationDate() { return creationDate; }

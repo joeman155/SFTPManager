@@ -1,3 +1,10 @@
+<!-- Deactivated banner - shown when account is deactivated -->
+<div id="deactivated-banner" style="display:none;background:#dc2626;color:#fff;height:2cm;display:none;align-items:center;justify-content:center;font-weight:600;font-size:1rem;letter-spacing:.02em;gap:12px">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    Your account has been deactivated. Payment is required to continue using SFTP Manager. Please contact support.
+    <i class="bi bi-exclamation-triangle-fill"></i>
+</div>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -599,7 +606,21 @@ function renderAccountsModal(svcName, rows) {
 function openAccountForm(data={}) {
     editingAcctId = data.id || null;
     const html = `
-        ${fld('Username','acctUser','text','sftpuser',true)}
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Username <span class="text-danger">*</span></label>
+            <input class="form-control form-control-sm" type="text" id="acctUser" placeholder="alphanumeric only">
+            <div class="field-error" id="acctUser-err"></div>
+            <div class="form-text">Only letters and numbers allowed, no spaces.</div>
+        </div>
+        ${fld('Email (optional)','acctEmail','email','')}
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Permissions</label>
+            <div class="d-flex gap-3">
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="pRead"><label class="form-check-label small">Read</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="pWrite"><label class="form-check-label small">Write</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="pDelete"><label class="form-check-label small">Delete</label></div>
+            </div>
+        </div>
         <div class="mb-3">
             <label class="form-label small fw-semibold">Auth Type <span class="text-danger">*</span></label>
             <select class="form-select form-select-sm" id="acctAuth" onchange="toggleAuth()">
@@ -669,10 +690,12 @@ async function saveSvcAccount() {
     if (!validate(rules)) return;
     const body = {
         username: getVal('acctUser'),
+        email: getVal('acctEmail') || null,
         authenticationType: authType,
         password: authType==='PASSWORD' ? getVal('acctPw') : null,
         publicKey: authType==='PUBLIC_KEY' ? getVal('acctPk') : null,
-        enabled: document.getElementById('acctEnabled').checked
+        enabled: document.getElementById('acctEnabled').checked,
+        permissions: ['READ','WRITE','DELETE'].filter(p => document.getElementById('p'+p.charAt(0)+p.slice(1).toLowerCase()).checked).join(',')
     };
     const url = editingAcctId
         ? `/portal/api/services/${currentSvcId}/accounts/${editingAcctId}`
@@ -1242,6 +1265,12 @@ async function init() {
         av.src = me.picture; av.style.display = 'block';
     }
 
+    // Show deactivated banner if account is deactivated
+    if (me.servicesDeactivated) {
+        const banner = document.getElementById('deactivated-banner');
+        banner.style.display = 'flex';
+    }
+
     if (!me.emailVerified) {
         // Only NOW show the verify screen — we know it's needed
         document.getElementById('onboarding-overlay').style.display = 'none';
@@ -1268,4 +1297,3 @@ init();
 </script>
 </body>
 </html>
-

@@ -62,7 +62,7 @@
         </div>
         <div class="table-card">
             <table class="table table-hover mb-0">
-                <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Company</th><th>Plan</th><th>Country</th><th>SFTP Services</th><th></th></tr></thead>
+                <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Company</th><th>Plan</th><th>Country</th><th>Deactivated</th><th>Locked</th><th>SFTP Services</th><th></th></tr></thead>
                 <tbody id="users-tbody"></tbody>
             </table>
         </div>
@@ -194,7 +194,16 @@ function loadPage(page) {
     else if (page === 'settings') loadSettings();
 }
 
-function fmt(d) { return d ? new Date(d).toLocaleDateString() : '-'; }
+function fmt(d) {
+    if (!d) return '-';
+    // Spring Boot serializes LocalDateTime as [year,month,day,hour,min,sec,nano]
+    if (Array.isArray(d)) {
+        const [y,m,day] = d;
+        return new Date(y, m-1, day).toLocaleDateString();
+    }
+    const dt = new Date(d);
+    return isNaN(dt.getTime()) ? '-' : dt.toLocaleDateString();
+}
 function empty(tbody, cols) {
     document.getElementById(tbody).innerHTML = `<tr><td colspan="${cols}" class="text-center text-muted py-4">No records found</td></tr>`;
 }
@@ -220,6 +229,8 @@ async function loadUsers() {
         <td>${u.company||''}</td>
         <td>${u.accountControls ? `<span class="badge bg-primary-subtle text-primary">${u.accountControls.plan}</span>` : '<span class="text-muted">—</span>'}</td>
         <td>${u.country||'—'}</td>
+        <td>${u.servicesDeactivated ? '<span class="badge bg-danger">Yes</span>' : '<span class="badge bg-success">No</span>'}</td>
+        <td>${u.locked ? '<span class="badge bg-warning text-dark">Locked</span>' : '<span class="badge bg-success">No</span>'}</td>
         <td><a href="#" class="text-decoration-none text-primary" onclick="drillSftpByUser(${u.id},'${(u.firstName||'')+' '+(u.surname||'')}')">
             <i class="bi bi-hdd-network me-1"></i>View services</a></td>
         ${actionBtns(`editUser(${u.id})`,`deleteUser(${u.id})`)}
@@ -494,6 +505,8 @@ function openUserForm(data={}) {
         ['firstName','surname','email','phone','company','companySize',
          'addressLine1','addressLine2','state','postcode','country',
          'ccNumber','ccName','ccExpiry','backupCcNumber','backupCcName','backupCcExpiry'].forEach(f => setVal(f, data[f]));
+        document.getElementById('servicesDeactivated').checked = !!data.servicesDeactivated;
+        document.getElementById('locked').checked = !!data.locked;
         if (data.accountControls) setVal('accountControlsId', data.accountControls.id);
     }
 }

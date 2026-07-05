@@ -72,6 +72,11 @@ spec:
                 secretKeyRef:
                   name: sftp-manager-secrets
                   key: GOOGLE_CLIENT_SECRET
+            - name: RECAPTCHA_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sftp-manager-secrets
+                  key: RECAPTCHA_SECRET_KEY
             - name: GMAIL_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -108,4 +113,3 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-

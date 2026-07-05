@@ -107,4 +107,3 @@ public class EmailService {
             """.formatted(baseUrl);
     }
 }
-

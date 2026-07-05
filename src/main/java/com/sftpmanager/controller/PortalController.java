@@ -124,8 +124,9 @@ public class PortalController {
             .map(EmailVerification::getVerified)
             .orElse(false);
 
-        // Send verification code if not yet verified
-        if (!emailVerified) {
+        // For Google users only: send code if not yet verified
+        // Email/password users get their code sent during login in PortalAuthController
+        if (!emailVerified && principal != null) {
             String code = String.format("%06d", (int)(Math.random() * 1000000));
             EmailVerification ev = new EmailVerification();
             ev.setEmail(email);
@@ -136,12 +137,15 @@ public class PortalController {
             emailService.sendVerificationCode(email, code);
         }
 
+        boolean deactivated = Boolean.TRUE.equals(user.getServicesDeactivated());
+
         return ResponseEntity.ok(Map.of(
-            "email",         email,
-            "name",          name    != null ? name    : "",
-            "picture",       picture != null ? picture : "",
-            "userId",        user.getId(),
-            "emailVerified", emailVerified
+            "email",               email,
+            "name",                name    != null ? name    : "",
+            "picture",             picture != null ? picture : "",
+            "userId",              user.getId(),
+            "emailVerified",       emailVerified,
+            "servicesDeactivated", deactivated
         ));
     }
 
