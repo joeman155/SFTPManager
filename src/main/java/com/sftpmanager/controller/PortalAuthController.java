@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.client.RestTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +21,8 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/portal/api/auth")
 public class PortalAuthController {
+
+    private static final Logger log = LoggerFactory.getLogger(PortalAuthController.class);
 
     private final UserRepository userRepository;
     private final EmailVerificationRepository verificationRepository;
@@ -52,8 +56,11 @@ public class PortalAuthController {
             if (response == null || !Boolean.TRUE.equals(response.get("success"))) return false;
             // v3 returns a score 0.0-1.0. Require score >= 0.5
             Object score = response.get("score");
+            log.info("reCAPTCHA score for signup: {}", score);
             if (score instanceof Number) {
-                return ((Number) score).doubleValue() >= 0.5;
+                double s = ((Number) score).doubleValue();
+                log.info("reCAPTCHA passed: {}", s >= 0.5);
+                return s >= 0.5;
             }
             return true;
         } catch (Exception e) {

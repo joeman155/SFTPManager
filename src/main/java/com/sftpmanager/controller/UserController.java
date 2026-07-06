@@ -58,6 +58,20 @@ public class UserController {
         }
     }
 
+    @PatchMapping("/{id}")
+    public ResponseEntity<?> patch(@PathVariable Long id, @RequestBody Map<String, Object> updates) {
+        return userService.findById(id).map(user -> {
+            if (updates.containsKey("locked")) {
+                user.setLocked(Boolean.TRUE.equals(updates.get("locked")));
+                user.setFailedLoginAttempts(0); // reset on unlock
+            }
+            if (updates.containsKey("servicesDeactivated")) {
+                user.setServicesDeactivated(Boolean.TRUE.equals(updates.get("servicesDeactivated")));
+            }
+            return ResponseEntity.ok(userService.save(user, null));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         userService.deleteById(id);

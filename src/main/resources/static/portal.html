@@ -581,18 +581,24 @@ async function manageAccounts(svcId, svcName) {
 }
 
 function renderAccountsModal(svcName, rows) {
-    const list = rows.length ? rows.map(a => `
-        <div class="account-card">
-            <div>
-                <strong>${a.username}</strong>
-                <span class="badge bg-secondary-subtle text-secondary ms-2">${a.authenticationType||''}</span>
-                <span class="ms-2 ${a.enabled?'badge-on':'badge-off'}">${a.enabled?'Enabled':'Disabled'}</span>
-            </div>
-            <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-secondary" onclick="editAccount(${a.id})"><i class="bi bi-pencil"></i></button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${a.id})"><i class="bi bi-trash"></i></button>
-            </div>
-        </div>`).join('')
+    const list = rows.length ? rows.map(a => {
+        const perms = (a.permissions || '').split(',').filter(Boolean);
+        const permBadges = perms.map(p =>
+            '<span class="badge bg-primary-subtle text-primary me-1" style="font-size:.7rem">' + p + '</span>'
+        ).join('');
+        return '<div class="account-card">'
+            + '<div>'
+            + '<strong>' + a.username + '</strong>'
+            + '<span class="badge bg-secondary-subtle text-secondary ms-2">' + (a.authenticationType||'') + '</span>'
+            + '<span class="ms-2 ' + (a.enabled?'badge-on':'badge-off') + '">' + (a.enabled?'Enabled':'Disabled') + '</span>'
+            + (a.email ? '<div class="text-muted small mt-1"><i class="bi bi-envelope me-1"></i>' + a.email + '</div>' : '')
+            + (permBadges ? '<div class="mt-1">' + permBadges + '</div>' : '')
+            + '</div>'
+            + '<div class="d-flex gap-2">'
+            + '<button class="btn btn-sm btn-outline-secondary" onclick="editAccount(' + a.id + ')"><i class="bi bi-pencil"></i></button>'
+            + '<button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(' + a.id + ')"><i class="bi bi-trash"></i></button>'
+            + '</div></div>';
+    }).join('')
     : '<p class="text-muted text-center py-3">No accounts yet</p>';
 
     openSubModal(`Service Accounts — ${svcName}`, `
@@ -658,8 +664,16 @@ function openAccountForm(data={}) {
     openSubModal((editingAcctId?'Edit':'New')+' Service Account', html);
     if (data.id) {
         setVal('acctUser', data.username);
+        setVal('acctEmail', data.email);
         setVal('acctAuth', data.authenticationType);
         setVal('acctEnabled', data.enabled);
+        const perms = (data.permissions || '').split(',');
+        const pRead = document.getElementById('pRead');
+        const pWrite = document.getElementById('pWrite');
+        const pDelete = document.getElementById('pDelete');
+        if (pRead) pRead.checked = perms.includes('READ');
+        if (pWrite) pWrite.checked = perms.includes('WRITE');
+        if (pDelete) pDelete.checked = perms.includes('DELETE');
         toggleAuth();
         if (data.password) setVal('acctPw', data.password);
         if (data.publicKey) setVal('acctPk', data.publicKey);
@@ -684,7 +698,7 @@ function updateStrength(pw) {
 
 async function saveSvcAccount() {
     const authType = getVal('acctAuth');
-    const rules = [['acctUser',V.required],['acctAuth',V.required]];
+    const rules = [['acctUser',V.required, v => /^[a-zA-Z0-9]+$/.test(v) ? null : 'Username must be alphanumeric with no spaces'],['acctAuth',V.required]];
     if (authType==='PASSWORD') rules.push(['acctPw',V.required,V.password]);
     if (authType==='PUBLIC_KEY') rules.push(['acctPk',V.required,V.publicKey]);
     if (!validate(rules)) return;
@@ -695,7 +709,7 @@ async function saveSvcAccount() {
         password: authType==='PASSWORD' ? getVal('acctPw') : null,
         publicKey: authType==='PUBLIC_KEY' ? getVal('acctPk') : null,
         enabled: document.getElementById('acctEnabled').checked,
-        permissions: ['READ','WRITE','DELETE'].filter(p => document.getElementById('p'+p.charAt(0)+p.slice(1).toLowerCase()).checked).join(',')
+        permissions: ['READ','WRITE','DELETE'].filter(p => { const el = document.getElementById('p' + p.charAt(0) + p.slice(1).toLowerCase()); return el && el.checked; }).join(',')
     };
     const url = editingAcctId
         ? `/portal/api/services/${currentSvcId}/accounts/${editingAcctId}`
@@ -714,17 +728,20 @@ async function deleteAccount(id) {
     if (!confirm('Delete this account?')) return;
     await fetch(`/portal/api/accounts/${id}`, {method:'DELETE'});
     const rows = await fetch(`/portal/api/services/${currentSvcId}/accounts`).then(r=>r.json()).catch(()=>[]);
-    document.getElementById('accounts-list').innerHTML = rows.length ? rows.map(a => `
-        <div class="account-card">
-            <div><strong>${a.username}</strong>
-                <span class="badge bg-secondary-subtle text-secondary ms-2">${a.authenticationType||''}</span>
-                <span class="ms-2 ${a.enabled?'badge-on':'badge-off'}">${a.enabled?'Enabled':'Disabled'}</span>
-            </div>
-            <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-secondary" onclick="editAccount(${a.id})"><i class="bi bi-pencil"></i></button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${a.id})"><i class="bi bi-trash"></i></button>
-            </div>
-        </div>`).join('') : '<p class="text-muted text-center py-3">No accounts yet</p>';
+    document.getElementById('accounts-list').innerHTML = rows.length ? rows.map(a => {
+        const perms = (a.permissions || '').split(',').filter(Boolean);
+        const permBadges = perms.map(p => '<span class="badge bg-primary-subtle text-primary me-1" style="font-size:.7rem">' + p + '</span>').join('');
+        return '<div class="account-card"><div>'
+            + '<strong>' + a.username + '</strong>'
+            + '<span class="badge bg-secondary-subtle text-secondary ms-2">' + (a.authenticationType||'') + '</span>'
+            + '<span class="ms-2 ' + (a.enabled?'badge-on':'badge-off') + '">' + (a.enabled?'Enabled':'Disabled') + '</span>'
+            + (a.email ? '<div class="text-muted small mt-1"><i class="bi bi-envelope me-1"></i>' + a.email + '</div>' : '')
+            + (permBadges ? '<div class="mt-1">' + permBadges + '</div>' : '')
+            + '</div><div class="d-flex gap-2">'
+            + '<button class="btn btn-sm btn-outline-secondary" onclick="editAccount(' + a.id + ')"><i class="bi bi-pencil"></i></button>'
+            + '<button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(' + a.id + ')"><i class="bi bi-trash"></i></button>'
+            + '</div></div>';
+    }).join('') : '<p class="text-muted text-center py-3">No accounts yet</p>';
 }
 
 async function backToAccounts() {

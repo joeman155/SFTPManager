@@ -62,7 +62,7 @@
         </div>
         <div class="table-card">
             <table class="table table-hover mb-0">
-                <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Company</th><th>Plan</th><th>Country</th><th>Deactivated</th><th>Locked</th><th>SFTP Services</th><th></th></tr></thead>
+                <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Company</th><th>Plan</th><th>Country</th><th>Active</th><th>Locked</th><th>SFTP Services</th><th></th></tr></thead>
                 <tbody id="users-tbody"></tbody>
             </table>
         </div>
@@ -92,7 +92,7 @@
         </div>
         <div class="table-card">
             <table class="table table-hover mb-0">
-                <thead class="table-light"><tr><th>Username</th><th>Auth Type</th><th>Status</th><th></th></tr></thead>
+                <thead class="table-light"><tr><th>Username</th><th>Email</th><th>Auth Type</th><th>Permissions</th><th>Status</th><th></th></tr></thead>
                 <tbody id="accounts-tbody"></tbody>
             </table>
         </div>
@@ -214,6 +214,27 @@ function actionBtns(editFn, delFn) {
     </td>`;
 }
 
+async function toggleUserLock(userId, unlocked) {
+    // unlocked=true means checkbox is checked = account is NOT locked
+    const body = { locked: !unlocked };
+    const r = await fetch(`${API}/users/${userId}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+    });
+    if (!r.ok) { alert('Failed to update lock status'); loadUsers(); }
+}
+
+async function toggleUserDeactivated(userId, deactivated) {
+    const body = { servicesDeactivated: deactivated };
+    const r = await fetch(`${API}/users/${userId}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+    });
+    if (!r.ok) { alert('Failed to update status'); loadUsers(); }
+}
+
 async function loadUsers() {
     const [users, controls] = await Promise.all([
         fetch(`${API}/users`).then(r=>r.json()).catch(()=>[]),
@@ -229,8 +250,22 @@ async function loadUsers() {
         <td>${u.company||''}</td>
         <td>${u.accountControls ? `<span class="badge bg-primary-subtle text-primary">${u.accountControls.plan}</span>` : '<span class="text-muted">—</span>'}</td>
         <td>${u.country||'—'}</td>
-        <td>${u.servicesDeactivated ? '<span class="badge bg-danger">Yes</span>' : '<span class="badge bg-success">No</span>'}</td>
-        <td>${u.locked ? '<span class="badge bg-warning text-dark">Locked</span>' : '<span class="badge bg-success">No</span>'}</td>
+        <td>
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" ${u.servicesDeactivated?'checked':''}
+                    onchange="toggleUserDeactivated(${u.id}, this.checked)"
+                    style="background-color:${u.servicesDeactivated?'#dc2626':''}">
+                <label class="form-check-label small">${u.servicesDeactivated?'<span class=\"text-danger\">Deactivated</span>':'Active'}</label>
+            </div>
+        </td>
+        <td>
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" ${u.locked?'':'checked'}
+                    onchange="toggleUserLock(${u.id}, this.checked)"
+                    title="${u.locked?'Click to unlock':'Account is unlocked'}">
+                <label class="form-check-label small">${u.locked?'<span class=\"text-danger\">Locked</span>':'<span class=\"text-success\">OK</span>'}</label>
+            </div>
+        </td>
         <td><a href="#" class="text-decoration-none text-primary" onclick="drillSftpByUser(${u.id},'${(u.firstName||'')+' '+(u.surname||'')}')">
             <i class="bi bi-hdd-network me-1"></i>View services</a></td>
         ${actionBtns(`editUser(${u.id})`,`deleteUser(${u.id})`)}
@@ -280,10 +315,12 @@ async function loadAccounts() {
         <span class="text-muted">/</span><span>Service Accounts</span>`;
     document.getElementById('accounts-title').textContent = `Service Accounts — ${currentSftpServiceName||'All'}`;
     const tbody = document.getElementById('accounts-tbody');
-    if (!rows.length) { empty('accounts-tbody', 4); return; }
+    if (!rows.length) { empty('accounts-tbody', 6); return; }
     tbody.innerHTML = rows.map(r => `<tr>
         <td>${r.username||''}</td>
+        <td>${r.email ? '<small>' + r.email + '</small>' : '—'}</td>
         <td><span class="badge bg-secondary-subtle text-secondary">${r.authenticationType||''}</span></td>
+        <td>${(r.permissions||'').split(',').filter(Boolean).map(p => '<span class="badge bg-primary-subtle text-primary me-1" style="font-size:.7rem">' + p + '</span>').join('')||'—'}</td>
         <td><span class="${r.enabled?'badge-on':'badge-off'}">${r.enabled?'Enabled':'Disabled'}</span></td>
         ${actionBtns(`editAccount(${r.id})`,`deleteAccount(${r.id})`)}
     </tr>`).join('');
@@ -611,7 +648,12 @@ function openAccountForm(data={}) {
                 </select>
                 <div class="field-error" id="acctSftpId-err"></div>
             </div>
-            ${fld('Username','acctUsername','text','sftpuser',true)}
+            <div class="col-md-6 mb-3">
+                <label class="form-label small fw-semibold">Username (alphanumeric only) <span class="text-danger">*</span></label>
+                <input class="form-control form-control-sm" type="text" id="acctUsername" placeholder="sftpuser">
+                <div class="field-error" id="acctUsername-err"></div>
+            </div>
+            ${fld('Email (optional)','acctEmail','email','')}
             <div class="col-md-6 mb-3">
                 <label class="form-label small fw-semibold">Authentication Type <span class="text-danger">*</span></label>
                 <select class="form-select form-select-sm" id="acctAuthType" onchange="toggleAuthFields()">
@@ -642,6 +684,14 @@ function openAccountForm(data={}) {
                 <div class="field-error" id="acctPublicKey-err"></div>
             </div>
         </div>
+        <div class="mb-3">
+            <div class="section-header mb-2">Permissions</div>
+            <div class="d-flex gap-3 ps-2">
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="adminPermRead"><label class="form-check-label small">Read</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="adminPermWrite"><label class="form-check-label small">Write</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="adminPermDelete"><label class="form-check-label small">Delete</label></div>
+            </div>
+        </div>
         <div class="form-check mb-3">
             <input class="form-check-input" type="checkbox" id="acctEnabled" checked>
             <label class="form-check-label small">Enabled</label>
@@ -650,12 +700,17 @@ function openAccountForm(data={}) {
     `);
     if (data.id) {
         setVal('acctUsername', data.username);
+        setVal('acctEmail', data.email);
         setVal('acctAuthType', data.authenticationType);
         setVal('acctEnabled', data.enabled);
         if (data.sftpService) setVal('acctSftpId', data.sftpService.id);
         toggleAuthFields();
         if (data.password) setVal('acctPassword', data.password);
         if (data.publicKey) setVal('acctPublicKey', data.publicKey);
+        const perms = (data.permissions || '').split(',');
+        document.getElementById('adminPermRead').checked = perms.includes('READ');
+        document.getElementById('adminPermWrite').checked = perms.includes('WRITE');
+        document.getElementById('adminPermDelete').checked = perms.includes('DELETE');
     }
 }
 
@@ -677,7 +732,7 @@ async function saveAccount() {
     const authType = getVal('acctAuthType');
     const rules = [
         ['acctSftpId', V.required],
-        ['acctUsername', V.required],
+        ['acctUsername', V.required, v => /^[a-zA-Z0-9]+$/.test(v) ? null : 'Username must be alphanumeric with no spaces'],
         ['acctAuthType', V.required],
     ];
     if (authType === 'PASSWORD') rules.push(['acctPassword', V.required, V.password]);
@@ -694,7 +749,10 @@ async function saveAccount() {
     const url = editingId ? `${API}/sftpserviceaccounts/${editingId}?sftpServiceId=${sftpId}` : `${API}/sftpserviceaccounts?sftpServiceId=${sftpId}`;
     const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
     if (r.ok) { closeModal(); loadAccounts(); }
-    else alert('Save failed');
+    else {
+        const err = await r.json().catch(()=>({}));
+        showError('acctUsername-err', err.error || err.username || 'Save failed — check all fields are valid');
+    }
 }
 
 async function editAccount(id) {
