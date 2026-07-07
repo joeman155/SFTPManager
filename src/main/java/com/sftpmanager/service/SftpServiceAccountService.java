@@ -35,9 +35,11 @@ public class SftpServiceAccountService {
         return repository.findById(id).map(existing -> {
             existing.setAuthenticationType(updated.getAuthenticationType());
             existing.setUsername(updated.getUsername());
+            existing.setEmail(updated.getEmail());
             existing.setPassword(updated.getPassword());
             existing.setPublicKey(updated.getPublicKey());
             existing.setEnabled(updated.getEnabled());
+            existing.setPermissions(updated.getPermissions());
             existing.setLastUpdatedBy(updated.getLastUpdatedBy());
             if (sftpServiceId != null) {
                 sftpServiceRepository.findById(sftpServiceId).ifPresent(existing::setSftpService);

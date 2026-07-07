@@ -741,10 +741,15 @@ async function saveAccount() {
     const sftpId = getVal('acctSftpId');
     const body = {
         username: getVal('acctUsername'),
+        email: getVal('acctEmail') || null,
         authenticationType: authType,
         password: authType === 'PASSWORD' ? getVal('acctPassword') : null,
         publicKey: authType === 'PUBLIC_KEY' ? getVal('acctPublicKey') : null,
-        enabled: document.getElementById('acctEnabled').checked
+        enabled: document.getElementById('acctEnabled').checked,
+        permissions: ['READ','WRITE','DELETE'].filter(p => {
+            const el = document.getElementById('adminPerm' + p.charAt(0) + p.slice(1).toLowerCase());
+            return el && el.checked;
+        }).join(',')
     };
     const url = editingId ? `${API}/sftpserviceaccounts/${editingId}?sftpServiceId=${sftpId}` : `${API}/sftpserviceaccounts?sftpServiceId=${sftpId}`;
     const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});

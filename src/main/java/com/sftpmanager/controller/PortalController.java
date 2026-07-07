@@ -262,10 +262,12 @@ public class PortalController {
                 .filter(a -> a.getSftpService() != null && a.getSftpService().getId().equals(svcId))
                 .map(a -> {
                     a.setUsername(updated.getUsername());
+                    a.setEmail(updated.getEmail());
                     a.setAuthenticationType(updated.getAuthenticationType());
                     a.setPassword(updated.getPassword());
                     a.setPublicKey(updated.getPublicKey());
                     a.setEnabled(updated.getEnabled());
+                    a.setPermissions(updated.getPermissions());
                     a.setLastUpdatedBy(user.getEmail());
                     return ResponseEntity.ok(accountRepository.save(a));
                 })
