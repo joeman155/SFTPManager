@@ -97,6 +97,12 @@ public class User {
     @Column(name = "trial_expires")
     private LocalDate trialExpires;
 
+    @Column(name = "trial_warning_sent")
+    private Boolean trialWarningSent = false;
+
+    @Column(name = "paid_to_date")
+    private LocalDate paidToDate;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "plan_id")
     private Plan plan;
@@ -177,6 +183,10 @@ public class User {
     public void setFailedLoginAttempts(Integer v) { this.failedLoginAttempts = v; }
     public LocalDate getTrialExpires() { return trialExpires; }
     public void setTrialExpires(LocalDate v) { this.trialExpires = v; }
+    public Boolean getTrialWarningSent() { return trialWarningSent; }
+    public void setTrialWarningSent(Boolean v) { this.trialWarningSent = v; }
+    public LocalDate getPaidToDate() { return paidToDate; }
+    public void setPaidToDate(LocalDate v) { this.paidToDate = v; }
     public Plan getPlan() { return plan; }
     public void setPlan(Plan v) { this.plan = v; }
     public AccountControls getAccountControls() { return accountControls; }

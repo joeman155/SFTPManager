@@ -3,11 +3,13 @@ package com.sftpmanager;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 
 @SpringBootApplication
 @EnableAsync
+@EnableScheduling
 public class SftpManagerApplication extends SpringBootServletInitializer {
 
     @Override
@@ -19,4 +21,3 @@ public class SftpManagerApplication extends SpringBootServletInitializer {
         SpringApplication.run(SftpManagerApplication.class, args);
     }
 }
-

@@ -63,6 +63,60 @@ public class EmailService {
     }
 
     @Async
+    public void sendPasswordResetEmail(String toEmail, String token) {
+        String link = baseUrl + "/portal/reset-password?token=" + token;
+        String html = """
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+                <h2 style="color:#1a1f36">Reset your password</h2>
+                <p>Click the button below to choose a new password. This link expires in <strong>10 minutes</strong>.</p>
+                <a href="%s" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0">
+                    Reset Password
+                </a>
+                <p style="color:#6b7280;font-size:.85rem">If you didn't request this, ignore this email — your password will not change.</p>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+            </div>
+            """.formatted(link);
+        sendHtml(toEmail, "Reset your SFTP Manager password", html);
+    }
+
+    @Async
+    public void sendTrialWarningEmail(String toEmail, String firstName) {
+        String html = """
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+                <h2 style="color:#92400e">Your trial ends tomorrow</h2>
+                <p>Hi %s,</p>
+                <p>Your 7-day free trial of SFTP Manager ends <strong>tomorrow</strong>. To keep your SFTP services running, add a credit card to your account.</p>
+                <a href="%s/portal" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0">
+                    Add payment details
+                </a>
+                <p style="color:#6b7280;font-size:.85rem">If no payment method is added, your services will be deactivated when the trial ends.</p>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+            </div>
+            """.formatted(firstName != null && !firstName.isBlank() ? firstName : "there", baseUrl);
+        sendHtml(toEmail, "Your SFTP Manager trial ends tomorrow", html);
+    }
+
+    @Async
+    public void sendTrialExpiredEmail(String toEmail, String firstName) {
+        String html = """
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+                <h2 style="color:#dc2626">Your trial has ended</h2>
+                <p>Hi %s,</p>
+                <p>Your free trial of SFTP Manager has ended and your services have been <strong>deactivated</strong>.</p>
+                <p>Add a credit card to reactivate your account immediately — your services and settings are all still saved.</p>
+                <a href="%s/portal" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0">
+                    Reactivate my account
+                </a>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+            </div>
+            """.formatted(firstName != null && !firstName.isBlank() ? firstName : "there", baseUrl);
+        sendHtml(toEmail, "Your SFTP Manager trial has ended — services deactivated", html);
+    }
+
+    @Async
     public void sendWelcomeEmail(String toEmail, String firstName) {
         String template = runtimeSettingsRepository.findByName("welcomeemail")
             .map(s -> s.getValue())

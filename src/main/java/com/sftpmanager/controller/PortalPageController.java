@@ -29,4 +29,7 @@ public class PortalPageController {
 
     @GetMapping("/verify-already")
     public String verifyAlready() { return "forward:/portal-verify.html"; }
+
+    @GetMapping("/reset-password")
+    public String resetPassword() { return "forward:/reset-password.html"; }
 }

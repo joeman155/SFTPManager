@@ -24,7 +24,7 @@
         .pw-toggle .eye { position:absolute; right:12px; top:50%; transform:translateY(-50%); cursor:pointer; color:#9ca3af; border:none; background:none; padding:0; }
         .field-error { color:#dc2626; font-size:.78rem; margin-top:3px; }
     </style>
-    <script src="https://www.google.com/recaptcha/api.js?render=6LfF2kUtAAAAABh-YoQdmybtgGBv0MWM1p1tfDmC"></script>
+    <script src="https://www.google.com/recaptcha/api.js?render=YOUR_RECAPTCHA_SITE_KEY"></script>
 </head>
 <body>
 <div class="login-card text-center">
@@ -62,6 +62,9 @@
                 </button>
             </div>
             <div class="field-error" id="password-err"></div>
+            <div class="text-end mt-1">
+                <a href="#" class="text-muted" style="font-size:.78rem" onclick="forgotPassword(event)">Forgot password?</a>
+            </div>
         </div>
         <!-- Name fields - shown when creating a new account -->
         <div id="name-fields" style="display:none">
@@ -147,6 +150,27 @@ async function checkNewUser() {
     }, 500);
 }
 
+async function forgotPassword(e) {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    if (!email || !email.includes('@')) {
+        showErr('email-err', 'Enter your email address above first, then click Forgot password');
+        return;
+    }
+    showErr('email-err', null);
+    try {
+        const res = await fetch('/portal/api/auth/forgot-password', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        showAlert('<i class="bi bi-envelope-check me-2"></i>' + (data.message || 'If that email is registered, a reset link has been sent.'), 'success');
+    } catch(err) {
+        showAlert('Network error. Please try again.', 'error');
+    }
+}
+
 async function emailSignIn() {
     const email     = document.getElementById('email').value.trim();
     const password  = document.getElementById('password').value;
@@ -181,7 +205,7 @@ async function emailSignIn() {
         if (isNewUser && typeof grecaptcha !== 'undefined') {
             captchaToken = await new Promise((resolve) => {
                 grecaptcha.ready(() => {
-                    grecaptcha.execute('6LfF2kUtAAAAABh-YoQdmybtgGBv0MWM1p1tfDmC', {action: 'signup'})
+                    grecaptcha.execute('YOUR_RECAPTCHA_SITE_KEY', {action: 'signup'})
                         .then(resolve);
                 });
             });

@@ -27,6 +27,7 @@ public class PortalSecurityConfig {
                 "/portal/**",
                 "/portal-login.html",
                 "/portal.html",
+                "/reset-password.html",
                 "/oauth2/authorization/google-portal",
                 "/login/oauth2/code/google-portal"
             )
@@ -34,6 +35,7 @@ public class PortalSecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/portal/login", "/portal-login.html").permitAll()
                 .requestMatchers("/portal/api/auth/**").permitAll()
+                .requestMatchers("/portal/reset-password", "/reset-password.html").permitAll()
                 .requestMatchers("/oauth2/authorization/google-portal", "/login/oauth2/code/google-portal").permitAll()
                 .anyRequest().authenticated()
             )

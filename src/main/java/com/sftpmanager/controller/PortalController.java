@@ -469,6 +469,8 @@ public class PortalController {
             user.setCcName(ccName);
             user.setCcExpiry(ccExpiry);
             user.setTrialExpires(null); // has CC, no trial needed
+            user.setPaidToDate(java.time.LocalDate.now().plusDays(30));
+            user.setServicesDeactivated(false);
         } else {
             // No CC - set 7 day trial
             user.setTrialExpires(java.time.LocalDate.now().plusDays(7));
@@ -523,6 +525,15 @@ public class PortalController {
             if (body.get("ccNumber")    != null) user.setCcNumber((String) body.get("ccNumber"));
             if (body.get("ccName")      != null) user.setCcName((String) body.get("ccName"));
             if (body.get("ccExpiry")    != null) user.setCcExpiry((String) body.get("ccExpiry"));
+
+            // If a credit card was provided, mark paid for 30 days and reactivate
+            String cc = (String) body.get("ccNumber");
+            if (cc != null && !cc.isBlank()) {
+                user.setPaidToDate(java.time.LocalDate.now().plusDays(30));
+                user.setTrialExpires(null);
+                user.setServicesDeactivated(false);
+            }
+
             user.setLastUpdatedBy(email);
             return ResponseEntity.ok(userRepository.save(user));
         }).orElse(ResponseEntity.notFound().build());

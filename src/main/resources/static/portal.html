@@ -235,6 +235,42 @@
                 </div>
             </div>
 
+            <!-- Change Password (email/password users only) -->
+            <div class="account-section" id="change-pw-section" style="display:none">
+                <h6>Password</h6>
+                <div id="change-pw-collapsed">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="toggleChangePw(true)">
+                        <i class="bi bi-key me-1"></i>Change password
+                    </button>
+                </div>
+                <div id="change-pw-form" style="display:none">
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <label class="form-label small fw-semibold">Current password</label>
+                            <input class="form-control form-control-sm" type="password" id="cp-current">
+                            <div class="field-error" id="cp-current-err"></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-semibold">New password</label>
+                            <input class="form-control form-control-sm" type="password" id="cp-new" placeholder="Min. 8 characters">
+                            <div class="field-error" id="cp-new-err"></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-semibold">Confirm new password</label>
+                            <input class="form-control form-control-sm" type="password" id="cp-confirm">
+                            <div class="field-error" id="cp-confirm-err"></div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary btn-sm" onclick="submitChangePw()">Update password</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="toggleChangePw(false)">Cancel</button>
+                    </div>
+                    <div class="text-success small mt-2" id="cp-success" style="display:none">
+                        <i class="bi bi-check-circle me-1"></i>Password updated successfully
+                    </div>
+                </div>
+            </div>
+
             <div class="d-flex justify-content-end gap-2 pt-2 border-top">
                 <button class="btn btn-secondary btn-sm" onclick="closeAccount()">Cancel</button>
                 <button class="btn btn-primary btn-sm" onclick="saveAccount()">Save changes</button>
@@ -581,24 +617,18 @@ async function manageAccounts(svcId, svcName) {
 }
 
 function renderAccountsModal(svcName, rows) {
-    const list = rows.length ? rows.map(a => {
-        const perms = (a.permissions || '').split(',').filter(Boolean);
-        const permBadges = perms.map(p =>
-            '<span class="badge bg-primary-subtle text-primary me-1" style="font-size:.7rem">' + p + '</span>'
-        ).join('');
-        return '<div class="account-card">'
-            + '<div>'
-            + '<strong>' + a.username + '</strong>'
-            + '<span class="badge bg-secondary-subtle text-secondary ms-2">' + (a.authenticationType||'') + '</span>'
-            + '<span class="ms-2 ' + (a.enabled?'badge-on':'badge-off') + '">' + (a.enabled?'Enabled':'Disabled') + '</span>'
-            + (a.email ? '<div class="text-muted small mt-1"><i class="bi bi-envelope me-1"></i>' + a.email + '</div>' : '')
-            + (permBadges ? '<div class="mt-1">' + permBadges + '</div>' : '')
-            + '</div>'
-            + '<div class="d-flex gap-2">'
-            + '<button class="btn btn-sm btn-outline-secondary" onclick="editAccount(' + a.id + ')"><i class="bi bi-pencil"></i></button>'
-            + '<button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(' + a.id + ')"><i class="bi bi-trash"></i></button>'
-            + '</div></div>';
-    }).join('')
+    const list = rows.length ? rows.map(a => `
+        <div class="account-card">
+            <div>
+                <strong>${a.username}</strong>
+                <span class="badge bg-secondary-subtle text-secondary ms-2">${a.authenticationType||''}</span>
+                <span class="ms-2 ${a.enabled?'badge-on':'badge-off'}">${a.enabled?'Enabled':'Disabled'}</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="editAccount(${a.id})"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${a.id})"><i class="bi bi-trash"></i></button>
+            </div>
+        </div>`).join('')
     : '<p class="text-muted text-center py-3">No accounts yet</p>';
 
     openSubModal(`Service Accounts — ${svcName}`, `
@@ -664,16 +694,8 @@ function openAccountForm(data={}) {
     openSubModal((editingAcctId?'Edit':'New')+' Service Account', html);
     if (data.id) {
         setVal('acctUser', data.username);
-        setVal('acctEmail', data.email);
         setVal('acctAuth', data.authenticationType);
         setVal('acctEnabled', data.enabled);
-        const perms = (data.permissions || '').split(',');
-        const pRead = document.getElementById('pRead');
-        const pWrite = document.getElementById('pWrite');
-        const pDelete = document.getElementById('pDelete');
-        if (pRead) pRead.checked = perms.includes('READ');
-        if (pWrite) pWrite.checked = perms.includes('WRITE');
-        if (pDelete) pDelete.checked = perms.includes('DELETE');
         toggleAuth();
         if (data.password) setVal('acctPw', data.password);
         if (data.publicKey) setVal('acctPk', data.publicKey);
@@ -698,7 +720,7 @@ function updateStrength(pw) {
 
 async function saveSvcAccount() {
     const authType = getVal('acctAuth');
-    const rules = [['acctUser',V.required, v => /^[a-zA-Z0-9]+$/.test(v) ? null : 'Username must be alphanumeric with no spaces'],['acctAuth',V.required]];
+    const rules = [['acctUser',V.required],['acctAuth',V.required]];
     if (authType==='PASSWORD') rules.push(['acctPw',V.required,V.password]);
     if (authType==='PUBLIC_KEY') rules.push(['acctPk',V.required,V.publicKey]);
     if (!validate(rules)) return;
@@ -709,7 +731,7 @@ async function saveSvcAccount() {
         password: authType==='PASSWORD' ? getVal('acctPw') : null,
         publicKey: authType==='PUBLIC_KEY' ? getVal('acctPk') : null,
         enabled: document.getElementById('acctEnabled').checked,
-        permissions: ['READ','WRITE','DELETE'].filter(p => { const el = document.getElementById('p' + p.charAt(0) + p.slice(1).toLowerCase()); return el && el.checked; }).join(',')
+        permissions: ['READ','WRITE','DELETE'].filter(p => document.getElementById('p'+p.charAt(0)+p.slice(1).toLowerCase()).checked).join(',')
     };
     const url = editingAcctId
         ? `/portal/api/services/${currentSvcId}/accounts/${editingAcctId}`
@@ -728,20 +750,17 @@ async function deleteAccount(id) {
     if (!confirm('Delete this account?')) return;
     await fetch(`/portal/api/accounts/${id}`, {method:'DELETE'});
     const rows = await fetch(`/portal/api/services/${currentSvcId}/accounts`).then(r=>r.json()).catch(()=>[]);
-    document.getElementById('accounts-list').innerHTML = rows.length ? rows.map(a => {
-        const perms = (a.permissions || '').split(',').filter(Boolean);
-        const permBadges = perms.map(p => '<span class="badge bg-primary-subtle text-primary me-1" style="font-size:.7rem">' + p + '</span>').join('');
-        return '<div class="account-card"><div>'
-            + '<strong>' + a.username + '</strong>'
-            + '<span class="badge bg-secondary-subtle text-secondary ms-2">' + (a.authenticationType||'') + '</span>'
-            + '<span class="ms-2 ' + (a.enabled?'badge-on':'badge-off') + '">' + (a.enabled?'Enabled':'Disabled') + '</span>'
-            + (a.email ? '<div class="text-muted small mt-1"><i class="bi bi-envelope me-1"></i>' + a.email + '</div>' : '')
-            + (permBadges ? '<div class="mt-1">' + permBadges + '</div>' : '')
-            + '</div><div class="d-flex gap-2">'
-            + '<button class="btn btn-sm btn-outline-secondary" onclick="editAccount(' + a.id + ')"><i class="bi bi-pencil"></i></button>'
-            + '<button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(' + a.id + ')"><i class="bi bi-trash"></i></button>'
-            + '</div></div>';
-    }).join('') : '<p class="text-muted text-center py-3">No accounts yet</p>';
+    document.getElementById('accounts-list').innerHTML = rows.length ? rows.map(a => `
+        <div class="account-card">
+            <div><strong>${a.username}</strong>
+                <span class="badge bg-secondary-subtle text-secondary ms-2">${a.authenticationType||''}</span>
+                <span class="ms-2 ${a.enabled?'badge-on':'badge-off'}">${a.enabled?'Enabled':'Disabled'}</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="editAccount(${a.id})"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${a.id})"><i class="bi bi-trash"></i></button>
+            </div>
+        </div>`).join('') : '<p class="text-muted text-center py-3">No accounts yet</p>';
 }
 
 async function backToAccounts() {
@@ -1058,7 +1077,55 @@ async function openAccount(e) {
         searchEl.value = parts.join(', ');
     }
 
+    // Show change password section only for email/password users
+    document.getElementById('change-pw-section').style.display =
+        (user.authType === 'EMAIL') ? 'block' : 'none';
+    toggleChangePw(false);
+
     document.getElementById('account-modal-overlay').style.display = 'flex';
+}
+
+function toggleChangePw(show) {
+    document.getElementById('change-pw-collapsed').style.display = show ? 'none' : 'block';
+    document.getElementById('change-pw-form').style.display = show ? 'block' : 'none';
+    if (!show) {
+        ['cp-current','cp-new','cp-confirm'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        ['cp-current-err','cp-new-err','cp-confirm-err'].forEach(id => showErr(id, null));
+        document.getElementById('cp-success').style.display = 'none';
+    }
+}
+
+async function submitChangePw() {
+    const current = document.getElementById('cp-current').value;
+    const nw      = document.getElementById('cp-new').value;
+    const confirm = document.getElementById('cp-confirm').value;
+    let valid = true;
+
+    if (!current) { showErr('cp-current-err', 'Current password is required'); valid = false; }
+    else showErr('cp-current-err', null);
+
+    if (!nw || nw.length < 8) { showErr('cp-new-err', 'New password must be at least 8 characters'); valid = false; }
+    else showErr('cp-new-err', null);
+
+    if (nw !== confirm) { showErr('cp-confirm-err', 'Passwords do not match'); valid = false; }
+    else showErr('cp-confirm-err', null);
+
+    if (!valid) return;
+
+    const res = await fetch('/portal/api/auth/change-password', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ currentPassword: current, newPassword: nw })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+        document.getElementById('cp-success').style.display = 'block';
+        ['cp-current','cp-new','cp-confirm'].forEach(id => document.getElementById(id).value = '');
+        setTimeout(() => toggleChangePw(false), 2000);
+    } else {
+        showErr('cp-current-err', data.error || 'Password change failed');
+    }
 }
 
 function closeAccount() {
