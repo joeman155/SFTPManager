@@ -232,14 +232,14 @@ public class PortalAuthController {
             return ResponseEntity.badRequest().body(Map.of("error", "Password must be at least 8 characters"));
         }
 
-        return passwordResetRepository.findByToken(token).map(reset -> {
+        return passwordResetRepository.findByToken(token).<ResponseEntity<?>>map(reset -> {
             if (Boolean.TRUE.equals(reset.getUsed())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "This reset link has already been used."));
             }
             if (reset.getExpiresAt().isBefore(LocalDateTime.now())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "This reset link has expired. Please request a new one."));
             }
-            return userRepository.findByEmail(reset.getEmail()).map(user -> {
+            return userRepository.findByEmail(reset.getEmail()).<ResponseEntity<?>>map(user -> {
                 user.setPasswordHash(passwordEncoder.encode(newPassword));
                 user.setLocked(false);
                 user.setFailedLoginAttempts(0);
@@ -266,7 +266,7 @@ public class PortalAuthController {
             return ResponseEntity.badRequest().body(Map.of("error", "New password must be at least 8 characters"));
         }
 
-        return userRepository.findByEmail(email).map(user -> {
+        return userRepository.findByEmail(email).<ResponseEntity<?>>map(user -> {
             if (user.getPasswordHash() == null ||
                 !passwordEncoder.matches(currentPassword != null ? currentPassword : "", user.getPasswordHash())) {
                 return ResponseEntity.status(401).body(Map.of("error", "Current password is incorrect"));
