@@ -222,8 +222,7 @@ async function toggleUserLock(userId, unlocked) {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify(body)
     });
-    if (!r.ok) { alert('Failed to update lock status'); }
-    loadUsers();
+    if (!r.ok) { alert('Failed to update lock status'); loadUsers(); }
 }
 
 async function toggleUserDeactivated(userId, deactivated) {
@@ -233,8 +232,7 @@ async function toggleUserDeactivated(userId, deactivated) {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify(body)
     });
-    if (!r.ok) { alert('Failed to update status'); }
-    loadUsers();
+    if (!r.ok) { alert('Failed to update status'); loadUsers(); }
 }
 
 async function loadUsers() {
@@ -257,7 +255,7 @@ async function loadUsers() {
                 <input class="form-check-input" type="checkbox" ${u.servicesDeactivated?'checked':''}
                     onchange="toggleUserDeactivated(${u.id}, this.checked)"
                     style="background-color:${u.servicesDeactivated?'#dc2626':''}">
-                <label class="form-check-label small">${u.servicesDeactivated?'<span class=\"text-danger\">Inactive</span>':'<span class=\"text-success\">Active</span>'}</label>
+                <label class="form-check-label small">${u.servicesDeactivated?'<span class=\"text-danger\">Deactivated</span>':'Active'}</label>
             </div>
         </td>
         <td>
@@ -743,15 +741,10 @@ async function saveAccount() {
     const sftpId = getVal('acctSftpId');
     const body = {
         username: getVal('acctUsername'),
-        email: getVal('acctEmail') || null,
         authenticationType: authType,
         password: authType === 'PASSWORD' ? getVal('acctPassword') : null,
         publicKey: authType === 'PUBLIC_KEY' ? getVal('acctPublicKey') : null,
-        enabled: document.getElementById('acctEnabled').checked,
-        permissions: ['READ','WRITE','DELETE'].filter(p => {
-            const el = document.getElementById('adminPerm' + p.charAt(0) + p.slice(1).toLowerCase());
-            return el && el.checked;
-        }).join(',')
+        enabled: document.getElementById('acctEnabled').checked
     };
     const url = editingId ? `${API}/sftpserviceaccounts/${editingId}?sftpServiceId=${sftpId}` : `${API}/sftpserviceaccounts?sftpServiceId=${sftpId}`;
     const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
