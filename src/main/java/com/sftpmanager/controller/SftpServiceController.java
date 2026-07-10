@@ -2,7 +2,6 @@ package com.sftpmanager.controller;
 
 import com.sftpmanager.model.SftpService;
 import com.sftpmanager.service.SftpServiceService;
-import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -40,14 +39,14 @@ public class SftpServiceController {
     }
 
     @PostMapping
-    public ResponseEntity<?> create(@Valid @RequestBody SftpService sftpService,
+    public ResponseEntity<?> create(@RequestBody SftpService sftpService,
                                     @RequestParam(required = false) Long userId) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.save(sftpService, userId));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable Long id,
-                                    @Valid @RequestBody SftpService sftpService,
+                                    @RequestBody SftpService sftpService,
                                     @RequestParam(required = false) Long userId) {
         try {
             return ResponseEntity.ok(service.update(id, sftpService, userId));

@@ -597,7 +597,6 @@ function openSftpForm(data={}) {
     openModal((editingId?'Edit':'New')+' SFTP Service', `
         <div class="row">
             ${fld('Service Name','sftpName','text','My SFTP Server',true)}
-            ${fld('Host / Hostname','sftpHost','text','sftp.example.com',true)}
             <div class="col-md-6 mb-3">
                 <label class="form-label small fw-semibold">Owner (User) <span class="text-danger">*</span></label>
                 <select class="form-select form-select-sm" id="sftpUserId">
@@ -605,21 +604,29 @@ function openSftpForm(data={}) {
                 </select>
                 <div class="field-error" id="sftpUserId-err"></div>
             </div>
+            <div class="col-12 mb-3">
+                <label class="form-label small fw-semibold">Purpose / Description</label>
+                <textarea class="form-control form-control-sm" id="sftpDesc" rows="2" placeholder="e.g. Main production file transfer server"></textarea>
+            </div>
+            <div class="col-12 mb-3">
+                <label class="form-label small fw-semibold">SFTP Host</label>
+                <input class="form-control form-control-sm" type="text" value="${editingId ? (data.host||'') : 'Auto-assigned on creation'}" disabled style="color:#6b7280;background:#f9fafb">
+                ${editingId ? '' : '<div class="form-text">Host is automatically assigned from our server pool.</div>'}
+            </div>
         </div>
         ${footerBtns('saveSftp')}
     `);
-    if (data.id) { setVal('sftpName', data.name); setVal('sftpHost', data.host); }
+    if (data.id) { setVal('sftpName', data.name); setVal('sftpDesc', data.description); }
 }
 
 async function saveSftp() {
     const valid = validateForm([
         ['sftpName', V.required],
-        ['sftpHost', V.required],
         ['sftpUserId', V.required],
     ]);
     if (!valid) return;
     const userId = getVal('sftpUserId');
-    const body = { name: getVal('sftpName'), host: getVal('sftpHost') };
+    const body = { name: getVal('sftpName'), description: getVal('sftpDesc') };
     const url = editingId ? `${API}/sftpservices/${editingId}?userId=${userId}` : `${API}/sftpservices?userId=${userId}`;
     const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
     if (r.ok) { closeModal(); loadSftpServices(); }
