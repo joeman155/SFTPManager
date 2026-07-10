@@ -65,10 +65,13 @@ public class PortalController {
     }
 
     // ── Helper: get current User from OAuth principal or email session ──
+    // Locked accounts resolve to empty, so callers reject them the same way
+    // they reject an unauthenticated request — covers accounts locked mid-session.
     private Optional<User> currentUser(OAuth2User principal, HttpSession session) {
         String email = resolveEmail(principal, session);
         if (email == null) return Optional.empty();
-        return userRepository.findByEmail(email);
+        return userRepository.findByEmail(email)
+            .filter(u -> !Boolean.TRUE.equals(u.getLocked()));
     }
 
     // Keep old signature for backward compat with portalUser helper
@@ -109,6 +112,11 @@ public class PortalController {
 
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) return ResponseEntity.status(401).build();
+
+        if (Boolean.TRUE.equals(user.getLocked())) {
+            session.invalidate();
+            return ResponseEntity.status(401).build();
+        }
 
         PortalUser portalUser = portalUserRepository.findByGoogleEmail(email).orElse(new PortalUser());
         boolean isNewUser = portalUser.getId() == null;

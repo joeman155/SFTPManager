@@ -238,7 +238,9 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Enter') emailSignIn();
 });
 
-if (window.location.search.includes('error=true')) {
+if (window.location.search.includes('error=locked')) {
+    showAlert('<i class="bi bi-exclamation-circle me-2"></i>This account is locked. Please contact support.', 'error');
+} else if (window.location.search.includes('error=true')) {
     showAlert('<i class="bi bi-exclamation-circle me-2"></i>Google sign in failed. Please try again.', 'error');
 }
 </script>

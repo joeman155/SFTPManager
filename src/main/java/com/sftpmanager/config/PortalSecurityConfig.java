@@ -1,20 +1,31 @@
 package com.sftpmanager.config;
 
+import com.sftpmanager.repository.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 @Configuration
 public class PortalSecurityConfig {
 
     private final EmailSessionFilter emailSessionFilter;
+    private final UserRepository userRepository;
 
-    public PortalSecurityConfig(EmailSessionFilter emailSessionFilter) {
+    public PortalSecurityConfig(EmailSessionFilter emailSessionFilter, UserRepository userRepository) {
         this.emailSessionFilter = emailSessionFilter;
+        this.userRepository = userRepository;
     }
 
     // Matches only the portal's own OAuth2 callback (google-portal),
@@ -42,7 +53,7 @@ public class PortalSecurityConfig {
             .addFilterBefore(emailSessionFilter, UsernamePasswordAuthenticationFilter.class)
             .oauth2Login(oauth -> oauth
                 .loginPage("/portal/login")
-                .defaultSuccessUrl("/portal", true)
+                .successHandler(portalSuccessHandler())
                 .failureUrl("/portal/login?error=true")
             )
             .logout(logout -> logout
@@ -52,5 +63,27 @@ public class PortalSecurityConfig {
                 .deleteCookies("JSESSIONID")
             );
         return http.build();
+    }
+
+    // Blocks locked accounts from completing Google sign-in, mirroring the
+    // check PortalAuthController already does for the email/password path.
+    private AuthenticationSuccessHandler portalSuccessHandler() {
+        return (HttpServletRequest request, HttpServletResponse response, Authentication authentication) -> {
+            OAuth2User principal = (OAuth2User) authentication.getPrincipal();
+            String email = principal.getAttribute("email");
+
+            boolean locked = userRepository.findByEmail(email)
+                .map(user -> Boolean.TRUE.equals(user.getLocked()))
+                .orElse(false);
+
+            if (locked) {
+                SecurityContextHolder.clearContext();
+                HttpSession session = request.getSession(false);
+                if (session != null) session.invalidate();
+                response.sendRedirect("/portal/login?error=locked");
+            } else {
+                response.sendRedirect("/portal");
+            }
+        };
     }
 }
