@@ -58,7 +58,13 @@
     <div class="page active" id="page-users">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h4 class="mb-0">Users</h4>
-            <button class="btn btn-primary btn-sm" onclick="openUserForm()"><i class="bi bi-plus-lg me-1"></i>Add User</button>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="small text-muted" id="billing-status-label"></span>
+                <button class="btn btn-outline-secondary btn-sm" onclick="runBillingNow()" title="Run the monthly billing pass now (honours dry-run setting)">
+                    <i class="bi bi-cash-stack me-1"></i>Run billing
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="openUserForm()"><i class="bi bi-plus-lg me-1"></i>Add User</button>
+            </div>
         </div>
         <div class="table-card">
             <table class="table table-hover mb-0">
@@ -207,6 +213,220 @@ function fmt(d) {
 function empty(tbody, cols) {
     document.getElementById(tbody).innerHTML = `<tr><td colspan="${cols}" class="text-center text-muted py-4">No records found</td></tr>`;
 }
+function cardText(brand, last4, expiry) {
+    if (!last4) return '<span class="text-muted">No card saved</span>';
+    return `${(brand||'card').toUpperCase()} •••• ${last4}` + (expiry ? ` (exp ${expiry})` : '');
+}
+
+// ── Billing ──
+let billingStatus = null;
+
+async function loadBillingStatus() {
+    billingStatus = await fetch(`${API}/billing/status`).then(r=>r.json()).catch(()=>null);
+    const label = document.getElementById('billing-status-label');
+    if (!billingStatus || !label) return;
+    const bits = [`Billing: ${billingStatus.mode}`];
+    if (billingStatus.schedulerDryRun) bits.push('scheduler DRY-RUN');
+    if (!billingStatus.chargingPossible) bits.push('charging blocked');
+    label.textContent = bits.join(' · ');
+    label.title = billingStatus.chargeBlockReason || '';
+}
+
+function loadStripeJs() {
+    return new Promise((resolve, reject) => {
+        if (window.Stripe) return resolve();
+        const s = document.createElement('script');
+        s.src = 'https://js.stripe.com/v3/';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Could not load Stripe.js'));
+        document.head.appendChild(s);
+    });
+}
+
+async function runBillingNow() {
+    if (!confirm('Run the monthly billing pass now? (In dry-run mode this only logs what would be charged.)')) return;
+    const r = await fetch(`${API}/billing/run-billing`, {method:'POST'});
+    const data = await r.json().catch(()=>({}));
+    alert(data.summary || 'Billing run failed');
+    loadUsers();
+}
+
+async function openBilling(userId) {
+    const u = allUsers.find(x => x.id === userId);
+    if (!u) return;
+    const payments = await fetch(`${API}/billing/payments/byuser/${userId}`).then(r=>r.json()).catch(()=>[]);
+    const rows = payments.length ? payments.map(p => `
+        <tr>
+            <td class="small">${p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}</td>
+            <td class="small">$${(p.amountCents/100).toFixed(2)} ${(p.currency||'').toUpperCase()}</td>
+            <td>${p.status === 'SUCCEEDED'
+                ? '<span class="badge-on">Succeeded</span>'
+                : `<span class="badge-off" title="${p.failureReason||''}">Failed</span>`}</td>
+            <td class="small">${p.cardDisplay||''}</td>
+            <td class="small">${p.initiatedBy||''}</td>
+        </tr>`).join('')
+        : '<tr><td colspan="5" class="text-muted small text-center py-3">No payments yet</td></tr>';
+
+    const cardRow = (slot, title, brand, last4, expiry) => `
+        <div class="d-flex justify-content-between align-items-center py-1">
+            <div><strong>${title}:</strong> ${cardText(brand, last4, expiry)}</div>
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-primary" onclick="adminOpenCardForm(${userId},'${slot}')">${last4 ? 'Replace' : 'Add card'}</button>
+                ${last4 ? `<button class="btn btn-sm btn-outline-danger" onclick="adminRemoveCard(${userId},'${slot}')"><i class="bi bi-trash"></i></button>` : ''}
+            </div>
+        </div>`;
+
+    openModal(`Billing — ${(u.firstName||'')+' '+(u.surname||'')}`, `
+        <div class="small mb-2">
+            ${cardRow('PRIMARY', 'Primary', u.ccBrand, u.ccLast4, u.ccExpiry)}
+            ${cardRow('BACKUP', 'Backup', u.backupCcBrand, u.backupCcLast4, u.backupCcExpiry)}
+            <div class="pt-1"><strong>Paid to:</strong> ${u.paidToDate || '—'} &nbsp; <strong>Trial expires:</strong> ${u.trialExpires || '—'}</div>
+        </div>
+        <div id="admin-card-form" class="mb-3" style="display:none"></div>
+        <div class="section-header mb-2">New charge</div>
+        <div class="row g-2 mb-3 align-items-end">
+            <div class="col-4">
+                <label class="form-label small fw-semibold">Amount ($)</label>
+                <input class="form-control form-control-sm" type="number" step="0.01" min="0.01" id="chg-amount" placeholder="29.00">
+            </div>
+            <div class="col-5">
+                <label class="form-label small fw-semibold">Description</label>
+                <input class="form-control form-control-sm" type="text" id="chg-desc" placeholder="Manual charge">
+            </div>
+            <div class="col-3">
+                <button class="btn btn-primary btn-sm w-100" onclick="chargeUser(${userId})">Charge card</button>
+            </div>
+        </div>
+        <div class="field-error mb-2" id="chg-err"></div>
+        <div class="section-header mb-2">Payment history</div>
+        <div style="max-height:260px;overflow-y:auto">
+            <table class="table table-sm mb-0">
+                <thead class="table-light"><tr><th>Date</th><th>Amount</th><th>Status</th><th>Card</th><th>By</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `);
+}
+
+// Add/replace a card on behalf of a user. The card number goes from THIS
+// browser to Stripe (or the mock gateway) — never through our server.
+async function adminOpenCardForm(userId, slot) {
+    if (!billingStatus) await loadBillingStatus();
+    const area = document.getElementById('admin-card-form');
+    area.style.display = 'block';
+    const title = (slot === 'BACKUP' ? 'Backup' : 'Primary') + ' card';
+
+    if (billingStatus.mode === 'mock') {
+        area.innerHTML = `
+            <div class="border rounded p-3" style="background:#f8f9fa">
+                <div class="small fw-semibold mb-2">${title}
+                    <span class="badge bg-warning-subtle text-warning-emphasis ms-1">TEST MODE — no real payments</span></div>
+                <div class="mb-2">
+                    <input class="form-control form-control-sm" type="text" id="adm-cc-number" placeholder="Card number — try 4242 4242 4242 4242">
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6"><input class="form-control form-control-sm" type="text" id="adm-cc-expiry" placeholder="MM/YY" maxlength="5"></div>
+                    <div class="col-6"><input class="form-control form-control-sm" type="text" id="adm-cc-cvc" placeholder="CVC" maxlength="4"></div>
+                </div>
+                <div class="field-error mb-2" id="adm-cc-err"></div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" onclick="adminSaveMockCard(${userId},'${slot}')">Save card</button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('admin-card-form').style.display='none'">Cancel</button>
+                </div>
+            </div>`;
+        return;
+    }
+
+    // Stripe mode
+    area.innerHTML = `<div class="border rounded p-3" style="background:#f8f9fa">
+        <div class="small text-muted">Loading secure card form…</div></div>`;
+    try {
+        await loadStripeJs();
+        const si = await fetch(`${API}/billing/setup-intent/${userId}`, {method:'POST'}).then(r=>r.json());
+        if (!si.clientSecret) throw new Error(si.error || 'Could not start card setup');
+        const stripe = Stripe(billingStatus.publishableKey);
+        area.innerHTML = `
+            <div class="border rounded p-3" style="background:#f8f9fa">
+                <div class="small fw-semibold mb-2">${title}</div>
+                <div id="adm-stripe-el" class="form-control form-control-sm mb-2" style="padding:10px"></div>
+                <div class="field-error mb-2" id="adm-cc-err"></div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" id="adm-stripe-save">Save card</button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('admin-card-form').style.display='none'">Cancel</button>
+                </div>
+            </div>`;
+        const card = stripe.elements().create('card');
+        card.mount('#adm-stripe-el');
+        document.getElementById('adm-stripe-save').onclick = async () => {
+            const btn = document.getElementById('adm-stripe-save');
+            btn.disabled = true; btn.textContent = 'Saving…';
+            const result = await stripe.confirmCardSetup(si.clientSecret, { payment_method: { card } });
+            if (result.error) {
+                document.getElementById('adm-cc-err').textContent = result.error.message;
+                btn.disabled = false; btn.textContent = 'Save card';
+                return;
+            }
+            const attach = await fetch(`${API}/billing/attach/${userId}`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ slot: slot, paymentMethodId: result.setupIntent.payment_method })
+            });
+            if (attach.ok) { await loadUsers(); openBilling(userId); }
+            else {
+                const e = await attach.json().catch(()=>({}));
+                document.getElementById('adm-cc-err').textContent = e.error || 'Could not save card';
+                btn.disabled = false; btn.textContent = 'Save card';
+            }
+        };
+    } catch (e) {
+        area.innerHTML = `<div class="field-error">${e.message}</div>`;
+    }
+}
+
+async function adminSaveMockCard(userId, slot) {
+    const number = document.getElementById('adm-cc-number').value;
+    const expiry = document.getElementById('adm-cc-expiry').value;
+    const cvc = document.getElementById('adm-cc-cvc').value;
+    const err = document.getElementById('adm-cc-err');
+    if (!/^\d{13,19}$/.test(number.replace(/\s/g,''))) { err.textContent = 'Invalid card number'; return; }
+    if (!/^\d{2}\/\d{2}$/.test(expiry)) { err.textContent = 'Expiry must be MM/YY'; return; }
+    if (!/^\d{3,4}$/.test(cvc)) { err.textContent = 'Invalid CVC'; return; }
+    err.textContent = '';
+    const r = await fetch(`${API}/billing/mock-save/${userId}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ slot: slot, cardNumber: number, expiry: expiry })
+    });
+    if (r.ok) { await loadUsers(); openBilling(userId); }
+    else {
+        const e = await r.json().catch(()=>({}));
+        err.textContent = e.error || 'Could not save card';
+    }
+}
+
+async function adminRemoveCard(userId, slot) {
+    if (!confirm('Remove this card?')) return;
+    await fetch(`${API}/billing/cards/${userId}/${slot}`, {method:'DELETE'});
+    await loadUsers();
+    openBilling(userId);
+}
+
+async function chargeUser(userId) {
+    const amount = parseFloat(document.getElementById('chg-amount').value);
+    const err = document.getElementById('chg-err');
+    if (!amount || amount <= 0) { err.textContent = 'Enter a valid amount'; return; }
+    if (!confirm(`Charge $${amount.toFixed(2)} to this user's saved card?`)) return;
+    err.textContent = '';
+    const r = await fetch(`${API}/billing/charge/${userId}`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+            amountCents: Math.round(amount * 100),
+            description: document.getElementById('chg-desc').value || 'Manual charge via admin'
+        })
+    });
+    const data = await r.json().catch(()=>({}));
+    if (data.succeeded) { alert('Payment succeeded'); openBilling(userId); }
+    else { err.textContent = data.message || data.error || 'Charge failed'; }
+}
+
 function actionBtns(editFn, delFn) {
     return `<td class="text-end pe-3">
         <button class="btn btn-sm btn-outline-secondary me-1" onclick="${editFn}"><i class="bi bi-pencil"></i></button>
@@ -270,7 +490,11 @@ async function loadUsers() {
         </td>
         <td><a href="#" class="text-decoration-none text-primary" onclick="drillSftpByUser(${u.id},'${(u.firstName||'')+' '+(u.surname||'')}')">
             <i class="bi bi-hdd-network me-1"></i>View services</a></td>
-        ${actionBtns(`editUser(${u.id})`,`deleteUser(${u.id})`)}
+        <td class="text-end pe-3">
+            <button class="btn btn-sm btn-outline-success me-1" title="Billing / payments" onclick="openBilling(${u.id})"><i class="bi bi-currency-dollar"></i></button>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick="editUser(${u.id})"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id})"><i class="bi bi-trash"></i></button>
+        </td>
     </tr>`).join('');
 }
 
@@ -526,24 +750,18 @@ function openUserForm(data={}) {
                 </select>
             </div>
         </div>
-        <div class="section-header mb-3 mt-1">Primary Card</div>
+        <div class="section-header mb-3 mt-1">Payment Cards <span class="text-muted small fw-normal">(managed by the user via the portal — stored with the payment provider)</span></div>
         <div class="row">
-            ${fld('Card Number','ccNumber','text','4111 1111 1111 1111')}
-            ${fld('Name on Card','ccName')}
-            ${fld('Expiry (MM/YY)','ccExpiry','text','12/27')}
-        </div>
-        <div class="section-header mb-3 mt-1">Backup Card</div>
-        <div class="row">
-            ${fld('Backup Card Number','backupCcNumber','text','4111 1111 1111 1111')}
-            ${fld('Backup Name on Card','backupCcName')}
-            ${fld('Backup Expiry (MM/YY)','backupCcExpiry','text','12/27')}
+            <div class="col-12 mb-3 small">
+                <div><strong>Primary:</strong> ${cardText(data.ccBrand, data.ccLast4, data.ccExpiry)}</div>
+                <div><strong>Backup:</strong> ${cardText(data.backupCcBrand, data.backupCcLast4, data.backupCcExpiry)}</div>
+            </div>
         </div>
         ${footerBtns('saveUser')}
     `);
     if (data.id) {
         ['firstName','surname','email','phone','company','companySize',
-         'addressLine1','addressLine2','state','postcode','country',
-         'ccNumber','ccName','ccExpiry','backupCcNumber','backupCcName','backupCcExpiry'].forEach(f => setVal(f, data[f]));
+         'addressLine1','addressLine2','state','postcode','country'].forEach(f => setVal(f, data[f]));
         document.getElementById('servicesDeactivated').checked = !!data.servicesDeactivated;
         document.getElementById('locked').checked = !!data.locked;
         if (data.accountControls) setVal('accountControlsId', data.accountControls.id);
@@ -557,16 +775,11 @@ async function saveUser() {
         ['email', V.required, V.email],
         ['phone', V.phone],
         ['postcode', V.postcode],
-        ['ccNumber', V.ccNumber],
-        ['ccExpiry', V.ccExpiry],
-        ['backupCcNumber', V.ccNumber],
-        ['backupCcExpiry', V.ccExpiry],
     ]);
     if (!valid) return;
     const body = {};
     ['firstName','surname','email','phone','company','companySize',
-     'addressLine1','addressLine2','state','postcode','country',
-     'ccNumber','ccName','ccExpiry','backupCcNumber','backupCcName','backupCcExpiry'].forEach(f => body[f] = getVal(f));
+     'addressLine1','addressLine2','state','postcode','country'].forEach(f => body[f] = getVal(f));
     const acId = getVal('accountControlsId');
     const acParam = acId && !isNaN(acId) && parseInt(acId) > 0 ? `?accountControlsId=${acId}` : '';
     const url = editingId ? `${API}/users/${editingId}${acParam}` : `${API}/users${acParam}`;
@@ -928,6 +1141,7 @@ async function init() {
         ]);
         allUsers = users; allControls = controls; allSftpServices = services;
         loadUsers();
+        loadBillingStatus();
     } catch (err) {
         console.error('Init failed:', err);
         document.getElementById('users-tbody').innerHTML =

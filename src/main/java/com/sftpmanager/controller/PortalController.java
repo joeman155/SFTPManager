@@ -467,20 +467,17 @@ public class PortalController {
             planRepository.findById(planId).ifPresent(user::setPlan);
         }
 
-        // Set CC details if provided
-        String ccNumber = (String) body.get("ccNumber");
-        String ccName   = (String) body.get("ccName");
-        String ccExpiry = (String) body.get("ccExpiry");
-
-        if (ccNumber != null && !ccNumber.isBlank()) {
-            user.setCcNumber(ccNumber);
-            user.setCcName(ccName);
-            user.setCcExpiry(ccExpiry);
-            user.setTrialExpires(null); // has CC, no trial needed
-            user.setPaidToDate(java.time.LocalDate.now().plusDays(30));
+        // Card saving now happens through /portal/api/billing before this call.
+        // Trust the server-side state, not the request body: a saved primary
+        // card means no trial is needed.
+        if (user.getCcPmId() != null) {
+            user.setTrialExpires(null);
             user.setServicesDeactivated(false);
+            if (user.getPaidToDate() == null) {
+                user.setPaidToDate(java.time.LocalDate.now().plusDays(30));
+            }
         } else {
-            // No CC - set 7 day trial
+            // No card — 7 day trial
             user.setTrialExpires(java.time.LocalDate.now().plusDays(7));
         }
 
@@ -530,17 +527,7 @@ public class PortalController {
             if (body.get("state")       != null) user.setState((String) body.get("state"));
             if (body.get("postcode")    != null) user.setPostcode((String) body.get("postcode"));
             if (body.get("country")     != null) user.setCountry((String) body.get("country"));
-            if (body.get("ccNumber")    != null) user.setCcNumber((String) body.get("ccNumber"));
-            if (body.get("ccName")      != null) user.setCcName((String) body.get("ccName"));
-            if (body.get("ccExpiry")    != null) user.setCcExpiry((String) body.get("ccExpiry"));
-
-            // If a credit card was provided, mark paid for 30 days and reactivate
-            String cc = (String) body.get("ccNumber");
-            if (cc != null && !cc.isBlank()) {
-                user.setPaidToDate(java.time.LocalDate.now().plusDays(30));
-                user.setTrialExpires(null);
-                user.setServicesDeactivated(false);
-            }
+            // Card changes go through /portal/api/billing — never through here.
 
             user.setLastUpdatedBy(email);
             return ResponseEntity.ok(userRepository.save(user));

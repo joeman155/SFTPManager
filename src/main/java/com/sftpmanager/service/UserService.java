@@ -45,12 +45,8 @@ public class UserService {
             existing.setCountry(updated.getCountry());
             existing.setPhone(updated.getPhone());
             existing.setEmail(updated.getEmail());
-            existing.setCcNumber(updated.getCcNumber());
-            existing.setCcName(updated.getCcName());
-            existing.setCcExpiry(updated.getCcExpiry());
-            existing.setBackupCcNumber(updated.getBackupCcNumber());
-            existing.setBackupCcName(updated.getBackupCcName());
-            existing.setBackupCcExpiry(updated.getBackupCcExpiry());
+            // Card data is managed exclusively via BillingService — admins
+            // can no longer write card fields through user updates.
             existing.setLastUpdatedBy(updated.getLastUpdatedBy());
             if (accountControlsId != null) {
                 accountControlsRepository.findById(accountControlsId).ifPresent(existing::setAccountControls);

@@ -52,20 +52,31 @@ public class User {
     @Column(name = "email", nullable = false, unique = true)
     private String email;
 
-    @Column(name = "cc_number")
-    private String ccNumber;
+    // Payment cards live in the gateway's vault (Stripe). We store only opaque
+    // references + display metadata — never the card number or CVV (PCI DSS).
+    @Column(name = "stripe_customer_id")
+    private String stripeCustomerId;
 
-    @Column(name = "cc_name")
-    private String ccName;
+    @Column(name = "cc_pm_id")
+    private String ccPmId;
+
+    @Column(name = "cc_brand")
+    private String ccBrand;
+
+    @Column(name = "cc_last4")
+    private String ccLast4;
 
     @Column(name = "cc_expiry")
     private String ccExpiry;
 
-    @Column(name = "backup_cc_number")
-    private String backupCcNumber;
+    @Column(name = "backup_cc_pm_id")
+    private String backupCcPmId;
 
-    @Column(name = "backup_cc_name")
-    private String backupCcName;
+    @Column(name = "backup_cc_brand")
+    private String backupCcBrand;
+
+    @Column(name = "backup_cc_last4")
+    private String backupCcLast4;
 
     @Column(name = "backup_cc_expiry")
     private String backupCcExpiry;
@@ -155,16 +166,22 @@ public class User {
     public void setPhone(String v) { this.phone = v; }
     public String getEmail() { return email; }
     public void setEmail(String v) { this.email = v; }
-    public String getCcNumber() { return ccNumber; }
-    public void setCcNumber(String v) { this.ccNumber = v; }
-    public String getCcName() { return ccName; }
-    public void setCcName(String v) { this.ccName = v; }
+    public String getStripeCustomerId() { return stripeCustomerId; }
+    public void setStripeCustomerId(String v) { this.stripeCustomerId = v; }
+    public String getCcPmId() { return ccPmId; }
+    public void setCcPmId(String v) { this.ccPmId = v; }
+    public String getCcBrand() { return ccBrand; }
+    public void setCcBrand(String v) { this.ccBrand = v; }
+    public String getCcLast4() { return ccLast4; }
+    public void setCcLast4(String v) { this.ccLast4 = v; }
     public String getCcExpiry() { return ccExpiry; }
     public void setCcExpiry(String v) { this.ccExpiry = v; }
-    public String getBackupCcNumber() { return backupCcNumber; }
-    public void setBackupCcNumber(String v) { this.backupCcNumber = v; }
-    public String getBackupCcName() { return backupCcName; }
-    public void setBackupCcName(String v) { this.backupCcName = v; }
+    public String getBackupCcPmId() { return backupCcPmId; }
+    public void setBackupCcPmId(String v) { this.backupCcPmId = v; }
+    public String getBackupCcBrand() { return backupCcBrand; }
+    public void setBackupCcBrand(String v) { this.backupCcBrand = v; }
+    public String getBackupCcLast4() { return backupCcLast4; }
+    public void setBackupCcLast4(String v) { this.backupCcLast4 = v; }
     public String getBackupCcExpiry() { return backupCcExpiry; }
     public void setBackupCcExpiry(String v) { this.backupCcExpiry = v; }
     public String getAuthType() { return authType; }

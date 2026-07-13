@@ -27,11 +27,13 @@ public class DataInitialiser implements CommandLineRunner {
             Plan basic = new Plan();
             basic.setName("Basic");
             basic.setDescription("Up to 5 SFTP services. 10GB storage. Email support. Perfect for individuals and small teams.");
+            basic.setMonthlyPriceCents(2900L);
             planRepository.save(basic);
 
             Plan enterprise = new Plan();
             enterprise.setName("Enterprise");
             enterprise.setDescription("Unlimited SFTP services. 1TB storage. Priority 24/7 support. Advanced security features. Ideal for growing businesses.");
+            enterprise.setMonthlyPriceCents(9900L);
             planRepository.save(enterprise);
         }
 

@@ -241,24 +241,15 @@
                 </div>
             </div>
 
-            <!-- Credit Card -->
+            <!-- Payment Cards (stored securely with our payment provider — card
+                 numbers and CVV never touch our servers or database) -->
             <div class="account-section">
-                <h6>Credit Card</h6>
-                <div class="row">
-                    <div class="col-12 mb-3">
-                        <label class="form-label small fw-semibold">Card Number</label>
-                        <input class="form-control form-control-sm" type="text" id="ac-cc-number" placeholder="4111 1111 1111 1111" oninput="formatCC(this)">
-                        <div class="field-error" id="ac-cc-number-err"></div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label small fw-semibold">Name on Card</label>
-                        <input class="form-control form-control-sm" type="text" id="ac-cc-name">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label small fw-semibold">Expiry (MM/YY)</label>
-                        <input class="form-control form-control-sm" type="text" id="ac-cc-expiry" placeholder="12/27" maxlength="5">
-                        <div class="field-error" id="ac-cc-expiry-err"></div>
-                    </div>
+                <h6>Payment Cards</h6>
+                <div id="cards-area"><span class="text-muted small">Loading…</span></div>
+                <div id="card-form-area" class="mt-2" style="display:none"></div>
+                <div class="form-text mt-1">
+                    <i class="bi bi-shield-lock me-1"></i>Cards are stored with our payment
+                    provider. We only keep the last 4 digits for display.
                 </div>
             </div>
 
@@ -364,23 +355,13 @@
         <!-- Step 2: Payment -->
         <div class="onboarding-body" id="step-2" style="display:none">
             <h6 class="fw-semibold mb-3">Payment details</h6>
-            <p class="text-muted small">Enter your credit card details to activate your plan. You can skip this to start a 7-day free trial.</p>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">Card Number</label>
-                <input class="form-control form-control-sm" type="text" id="ob-cc-number" placeholder="4111 1111 1111 1111" oninput="formatCC(this)">
-                <div class="field-error" id="ob-cc-number-err"></div>
+            <p class="text-muted small">Add a credit card to activate your plan. Your card is stored
+            securely with our payment provider — it never touches our servers.
+            You can skip this to start a 7-day free trial.</p>
+            <div id="ob-card-saved" class="mb-3" style="display:none">
+                <span class="badge-on"><i class="bi bi-check-circle me-1"></i><span id="ob-card-saved-label"></span></span>
             </div>
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label small fw-semibold">Name on Card</label>
-                    <input class="form-control form-control-sm" type="text" id="ob-cc-name" placeholder="Jane Smith">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label class="form-label small fw-semibold">Expiry (MM/YY)</label>
-                    <input class="form-control form-control-sm" type="text" id="ob-cc-expiry" placeholder="12/27" maxlength="5">
-                    <div class="field-error" id="ob-cc-expiry-err"></div>
-                </div>
-            </div>
+            <div id="ob-card-form"></div>
             <div class="trial-notice" id="trial-notice">
                 <i class="bi bi-clock me-2"></i>
                 <strong>7-day free trial.</strong> You have 7 days to enter credit card details before your account is suspended.
@@ -1093,9 +1074,6 @@ async function openAccount(e) {
         'ac-state': user.state,
         'ac-postcode': user.postcode,
         'ac-country': user.country,
-        'ac-cc-number': user.ccNumber,
-        'ac-cc-name': user.ccName,
-        'ac-cc-expiry': user.ccExpiry,
     };
     Object.entries(fields).forEach(([id, val]) => {
         const el = document.getElementById(id);
@@ -1112,6 +1090,8 @@ async function openAccount(e) {
     document.getElementById('change-pw-section').style.display =
         (user.authType === 'EMAIL') ? 'block' : 'none';
     toggleChangePw(false);
+
+    renderCards();
 
     document.getElementById('account-modal-overlay').style.display = 'flex';
 }
@@ -1176,18 +1156,7 @@ async function saveAccount() {
     else showErr('ac-phone', null);
     if (!valid) return;
 
-    // Validate CC if entered
-    const cc = document.getElementById('ac-cc-number').value.replace(/[\s]/g,'');
-    const expiry = document.getElementById('ac-cc-expiry').value;
-    if (cc) {
-        if (!/^\d{13,19}$/.test(cc)) { showErr('ac-cc-number','Invalid card number'); return; }
-        let sum=0,alt=false;
-        for(let i=cc.length-1;i>=0;i--){let d=parseInt(cc[i]);if(alt){d*=2;if(d>9)d-=9;}sum+=d;alt=!alt;}
-        if(sum%10!==0){ showErr('ac-cc-number','Invalid card number'); return; }
-        showErr('ac-cc-number', null);
-        if(expiry && !/^\d{2}\/\d{2}$/.test(expiry)){ showErr('ac-cc-expiry','Format must be MM/YY'); return; }
-        showErr('ac-cc-expiry', null);
-    }
+    // Cards are saved separately through the payment provider (see renderCards)
 
     const body = {
         firstName:   firstName,
@@ -1199,9 +1168,6 @@ async function saveAccount() {
         state:       document.getElementById('ac-state').value,
         postcode:    document.getElementById('ac-postcode').value,
         country:     document.getElementById('ac-country').value,
-        ccNumber:    cc || null,
-        ccName:      document.getElementById('ac-cc-name').value || null,
-        ccExpiry:    expiry || null,
     };
 
     const r = await fetch('/portal/api/account', {
@@ -1218,9 +1184,168 @@ async function saveAccount() {
     }
 }
 
+// ── Payment cards (Stripe or mock gateway — see /portal/api/billing/config) ──
+let billingConfig = null;
+
+async function getBillingConfig() {
+    if (!billingConfig) {
+        billingConfig = await fetch('/portal/api/billing/config')
+            .then(r => r.json()).catch(() => ({ mode: 'mock', publishableKey: '' }));
+    }
+    return billingConfig;
+}
+
+function loadStripeJs() {
+    return new Promise((resolve, reject) => {
+        if (window.Stripe) return resolve();
+        const s = document.createElement('script');
+        s.src = 'https://js.stripe.com/v3/';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Could not load Stripe.js'));
+        document.head.appendChild(s);
+    });
+}
+
+function cardLabel(c) {
+    return `${(c.brand || 'card').toUpperCase()} •••• ${c.last4}` + (c.expiry ? ` (exp ${c.expiry})` : '');
+}
+
+// Renders the saved-cards summary in the Account modal
+async function renderCards() {
+    const area = document.getElementById('cards-area');
+    if (!area) return;
+    const cards = await fetch('/portal/api/billing/cards').then(r => r.json()).catch(() => null);
+    if (!cards) { area.innerHTML = '<span class="text-muted small">Could not load cards</span>'; return; }
+    const row = (slot, title, c) => `
+        <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid #f1f2f4">
+            <div>
+                <div class="small fw-semibold">${title}</div>
+                ${c ? `<span class="small"><i class="bi bi-credit-card me-1"></i>${cardLabel(c)}</span>`
+                    : '<span class="small text-muted">No card saved</span>'}
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-primary" onclick="openCardForm('${slot}')">${c ? 'Replace' : 'Add card'}</button>
+                ${c ? `<button class="btn btn-sm btn-outline-danger" onclick="removeCard('${slot}')"><i class="bi bi-trash"></i></button>` : ''}
+            </div>
+        </div>`;
+    area.innerHTML = row('PRIMARY', 'Primary card', cards.primary)
+                   + row('BACKUP', 'Backup card', cards.backup);
+}
+
+async function removeCard(slot) {
+    if (!confirm('Remove this card?')) return;
+    await fetch(`/portal/api/billing/cards/${slot}`, { method: 'DELETE' });
+    renderCards();
+}
+
+function openCardForm(slot) {
+    const area = document.getElementById('card-form-area');
+    area.style.display = 'block';
+    mountCardForm(area, slot, () => { area.style.display = 'none'; area.innerHTML = ''; renderCards(); });
+}
+
+// Mounts a card-entry form into `container`. Stripe mode: a Stripe Element
+// (digits + CVV go browser → Stripe, never to our server). Mock mode: plain
+// inputs accepted by the built-in fake gateway.
+async function mountCardForm(container, slot, onSaved) {
+    const cfg = await getBillingConfig();
+    const title = slot === 'BACKUP' ? 'Backup card' : 'Primary card';
+
+    if (cfg.mode === 'mock') {
+        container.innerHTML = `
+            <div class="border rounded p-3" style="background:#f8f9fa">
+                <div class="small fw-semibold mb-2">${title}
+                    <span class="badge bg-warning-subtle text-warning-emphasis ms-1">TEST MODE — no real payments</span></div>
+                <div class="mb-2">
+                    <input class="form-control form-control-sm" type="text" id="mock-cc-number"
+                           placeholder="Card number — try 4242 4242 4242 4242" oninput="formatCC(this)">
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6"><input class="form-control form-control-sm" type="text" id="mock-cc-expiry" placeholder="MM/YY" maxlength="5"></div>
+                    <div class="col-6"><input class="form-control form-control-sm" type="text" id="mock-cc-cvc" placeholder="CVC" maxlength="4"></div>
+                </div>
+                <div class="field-error mb-2" id="mock-cc-err"></div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" onclick="saveMockCard('${slot}')">Save card</button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="this.closest('div.border').parentElement.style.display='none'">Cancel</button>
+                </div>
+            </div>`;
+        container._onSaved = onSaved;
+        return;
+    }
+
+    // Stripe mode
+    container.innerHTML = `<div class="border rounded p-3" style="background:#f8f9fa">
+        <div class="small fw-semibold mb-2">${title}</div>
+        <div class="small text-muted mb-2">Loading secure card form…</div></div>`;
+    try {
+        await loadStripeJs();
+        const si = await fetch('/portal/api/billing/setup-intent', { method: 'POST' }).then(r => r.json());
+        if (!si.clientSecret) throw new Error(si.error || 'Could not start card setup');
+        const stripe = Stripe(cfg.publishableKey);
+        container.innerHTML = `
+            <div class="border rounded p-3" style="background:#f8f9fa">
+                <div class="small fw-semibold mb-2">${title}</div>
+                <div id="stripe-card-el" class="form-control form-control-sm mb-2" style="padding:10px"></div>
+                <div class="field-error mb-2" id="stripe-cc-err"></div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" id="stripe-save-btn">Save card</button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="this.closest('div.border').parentElement.style.display='none'">Cancel</button>
+                </div>
+            </div>`;
+        const elements = stripe.elements();
+        const card = elements.create('card');
+        card.mount('#stripe-card-el');
+        document.getElementById('stripe-save-btn').onclick = async () => {
+            const btn = document.getElementById('stripe-save-btn');
+            btn.disabled = true; btn.textContent = 'Saving…';
+            const result = await stripe.confirmCardSetup(si.clientSecret, { payment_method: { card } });
+            if (result.error) {
+                document.getElementById('stripe-cc-err').textContent = result.error.message;
+                btn.disabled = false; btn.textContent = 'Save card';
+                return;
+            }
+            const attach = await fetch('/portal/api/billing/attach', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slot: slot, paymentMethodId: result.setupIntent.payment_method })
+            });
+            if (attach.ok) { onSaved(); }
+            else {
+                const e = await attach.json().catch(() => ({}));
+                document.getElementById('stripe-cc-err').textContent = e.error || 'Could not save card';
+                btn.disabled = false; btn.textContent = 'Save card';
+            }
+        };
+    } catch (e) {
+        container.innerHTML = `<div class="field-error">${e.message}</div>`;
+    }
+}
+
+async function saveMockCard(slot) {
+    const number = document.getElementById('mock-cc-number').value;
+    const expiry = document.getElementById('mock-cc-expiry').value;
+    const cvc = document.getElementById('mock-cc-cvc').value;
+    const err = document.getElementById('mock-cc-err');
+    if (!/^\d{13,19}$/.test(number.replace(/\s/g, ''))) { err.textContent = 'Invalid card number'; return; }
+    if (!/^\d{2}\/\d{2}$/.test(expiry)) { err.textContent = 'Expiry must be MM/YY'; return; }
+    if (!/^\d{3,4}$/.test(cvc)) { err.textContent = 'Invalid CVC'; return; }
+    err.textContent = '';
+    const r = await fetch('/portal/api/billing/mock-save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot: slot, cardNumber: number, expiry: expiry })
+    });
+    if (r.ok) {
+        const container = document.getElementById('mock-cc-number').closest('div.border').parentElement;
+        if (container._onSaved) container._onSaved();
+    } else {
+        const e = await r.json().catch(() => ({}));
+        err.textContent = e.error || 'Could not save card';
+    }
+}
+
 // ── Onboarding ──
 let obStep = 1;
-let obData = { planId: null, ccNumber: null, ccName: null, ccExpiry: null, phone: null, skipCC: false };
+let obData = { planId: null, phone: null, cardSaved: false };
 let obPlans = [];
 
 async function checkOnboarding() {
@@ -1234,7 +1359,7 @@ async function checkOnboarding() {
     // Render plans
     document.getElementById('plan-list').innerHTML = obPlans.map(p => `
         <div class="plan-card" id="plan-${p.id}" onclick="selectPlan(${p.id})">
-            <h6>${p.name}</h6>
+            <h6>${p.name}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}</h6>
             <p class="text-muted small mb-0">${p.description}</p>
         </div>`).join('');
 
@@ -1248,7 +1373,7 @@ async function checkOnboarding() {
     // Render plans
     document.getElementById('plan-list').innerHTML = obPlans.map(p => `
         <div class="plan-card" id="plan-${p.id}" onclick="selectPlan(${p.id})">
-            <h6>${p.name}</h6>
+            <h6>${p.name}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}</h6>
             <p class="text-muted small mb-0">${p.description}</p>
         </div>`).join('');
     document.getElementById('tc-content').innerHTML = data.termsAndConditions || '';
@@ -1277,8 +1402,21 @@ function updateObStep(step) {
     };
     document.getElementById('step-subtitle').textContent = subtitles[step];
     document.getElementById('ob-back-btn').style.display = step > 1 ? 'block' : 'none';
-    document.getElementById('ob-skip-btn').style.display = step === 2 ? 'block' : 'none';
+    document.getElementById('ob-skip-btn').style.display = (step === 2 && !obData.cardSaved) ? 'block' : 'none';
     document.getElementById('ob-next-btn').textContent = step === 4 ? 'Accept & Continue' : 'Next ›';
+
+    if (step === 2 && !obData.cardSaved) {
+        mountCardForm(document.getElementById('ob-card-form'), 'PRIMARY', onObCardSaved);
+    }
+}
+
+function onObCardSaved() {
+    obData.cardSaved = true;
+    document.getElementById('ob-card-form').innerHTML = '';
+    document.getElementById('ob-card-saved').style.display = 'block';
+    document.getElementById('ob-card-saved-label').textContent = 'Card saved securely';
+    document.getElementById('trial-notice').style.display = 'none';
+    document.getElementById('ob-skip-btn').style.display = 'none';
 }
 
 function obNext() {
@@ -1286,27 +1424,10 @@ function obNext() {
         if (!obData.planId) { alert('Please select a plan to continue.'); return; }
         updateObStep(2);
     } else if (obStep === 2) {
-        // Validate CC if entered
-        const cc = document.getElementById('ob-cc-number').value.replace(/[\s]/g,'');
-        const expiry = document.getElementById('ob-cc-expiry').value;
-        if (cc) {
-            // Luhn check
-            if (!/^\d{13,19}$/.test(cc)) { showErr('ob-cc-number','Invalid card number'); return; }
-            let sum=0, alt=false;
-            for(let i=cc.length-1;i>=0;i--){let d=parseInt(cc[i]);if(alt){d*=2;if(d>9)d-=9;}sum+=d;alt=!alt;}
-            if(sum%10!==0){ showErr('ob-cc-number','Invalid card number'); return; }
-            showErr('ob-cc-number', null);
-            // Expiry check
-            if(!/^\d{2}\/\d{2}$/.test(expiry)){ showErr('ob-cc-expiry','Format must be MM/YY'); return; }
-            const [m,y]=expiry.split('/').map(Number);
-            if(m<1||m>12){ showErr('ob-cc-expiry','Invalid month'); return; }
-            if(new Date(2000+y,m,0)<new Date()){ showErr('ob-cc-expiry','Card has expired'); return; }
-            showErr('ob-cc-expiry', null);
-            obData.ccNumber = cc;
-            obData.ccName = document.getElementById('ob-cc-name').value;
-            obData.ccExpiry = expiry;
-            obData.skipCC = false;
-            document.getElementById('trial-notice').style.display = 'none';
+        // Card saving happens inside the card widget (Save card button).
+        // Moving on without a saved card means the 7-day trial applies.
+        if (!obData.cardSaved) {
+            document.getElementById('trial-notice').style.display = 'block';
         }
         updateObStep(3);
     } else if (obStep === 3) {
@@ -1330,10 +1451,6 @@ function obBack() {
 }
 
 function obSkipCC() {
-    obData.skipCC = true;
-    obData.ccNumber = null;
-    obData.ccName = null;
-    obData.ccExpiry = null;
     document.getElementById('trial-notice').style.display = 'block';
     updateObStep(3);
 }
@@ -1348,11 +1465,8 @@ async function submitOnboarding() {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
-            planId:   obData.planId,
-            ccNumber: obData.ccNumber,
-            ccName:   obData.ccName,
-            ccExpiry: obData.ccExpiry,
-            phone:    obData.phone
+            planId: obData.planId,
+            phone:  obData.phone
         })
     });
     if (res.ok) {

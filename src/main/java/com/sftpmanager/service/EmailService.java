@@ -126,6 +126,24 @@ public class EmailService {
         sendHtml(toEmail, "Welcome to SFTP Manager", html);
     }
 
+    @Async
+    public void sendPaymentFailedEmail(String toEmail, String firstName, String amountDisplay) {
+        String html = """
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+                <h2 style="color:#dc2626">Payment failed</h2>
+                <p>Hi %s,</p>
+                <p>We tried to charge <strong>%s</strong> to your saved card(s) for your SFTP Manager subscription, but the payment did not go through.</p>
+                <p>Please check your card details or add a new card to keep your services running — otherwise they will be deactivated.</p>
+                <a href="%s/portal" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0">
+                    Update payment details
+                </a>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+            </div>
+            """.formatted(firstName != null && !firstName.isBlank() ? firstName : "there", amountDisplay, baseUrl);
+        sendHtml(toEmail, "SFTP Manager — payment failed, action needed", html);
+    }
+
     private void sendHtml(String to, String subject, String html) {
         try {
             MimeMessage msg = mailSender.createMimeMessage();
