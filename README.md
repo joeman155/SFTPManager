@@ -1,4 +1,4 @@
-# SFTP Manager
+# SFTP Manager.
 
 A Spring Boot web application for managing SFTP sites, users, and service accounts.
 
