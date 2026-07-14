@@ -239,7 +239,9 @@ document.addEventListener('keydown', e => {
 });
 
 if (window.location.search.includes('error=locked')) {
-    showAlert('<i class="bi bi-exclamation-circle me-2"></i>This account is locked. Please contact support.', 'error');
+    fetch('/portal/api/auth/config').then(r=>r.json()).catch(()=>({supportEmail:'support@leederville.net'}))
+        .then(cfg => showAlert('<i class="bi bi-exclamation-circle me-2"></i>This account is locked. Please contact '
+            + `<a href="mailto:${cfg.supportEmail}">${cfg.supportEmail}</a>.`, 'error'));
 } else if (window.location.search.includes('error=true')) {
     showAlert('<i class="bi bi-exclamation-circle me-2"></i>Google sign in failed. Please try again.', 'error');
 }

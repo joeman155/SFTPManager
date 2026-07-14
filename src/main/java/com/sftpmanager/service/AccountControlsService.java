@@ -26,6 +26,8 @@ public class AccountControlsService {
     public AccountControls update(Long id, AccountControls updated) {
         return repository.findById(id).map(existing -> {
             existing.setPlan(updated.getPlan());
+            existing.setDescription(updated.getDescription());
+            existing.setMonthlyPriceCents(updated.getMonthlyPriceCents());
             existing.setMaxUsers(updated.getMaxUsers());
             existing.setMaxServers(updated.getMaxServers());
             existing.setLastUpdatedBy(updated.getLastUpdatedBy());

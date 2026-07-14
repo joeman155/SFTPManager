@@ -70,13 +70,13 @@ public class BillingScheduler {
             if (Boolean.TRUE.equals(user.getLocked())) continue;
             if (Boolean.TRUE.equals(user.getServicesDeactivated())) continue;
             if (user.getPaidToDate() == null || user.getPaidToDate().isAfter(today)) continue;
-            if (user.getPlan() == null || user.getPlan().getMonthlyPriceCents() == null
-                    || user.getPlan().getMonthlyPriceCents() <= 0) continue;
+            if (user.getAccountControls() == null || user.getAccountControls().getMonthlyPriceCents() == null
+                    || user.getAccountControls().getMonthlyPriceCents() <= 0) continue;
             if (user.getCcPmId() == null && user.getBackupCcPmId() == null) { skipped++; continue; }
 
             due++;
-            long amount = user.getPlan().getMonthlyPriceCents();
-            String desc = "SFTP Manager — " + user.getPlan().getName() + " plan, month starting " + user.getPaidToDate();
+            long amount = user.getAccountControls().getMonthlyPriceCents();
+            String desc = "SFTP Manager — " + user.getAccountControls().getPlan() + " plan, month starting " + user.getPaidToDate();
 
             if (dryRun) {
                 log.info("BILLING SCHEDULER [DRY-RUN]: would charge {} {} cents ({})",

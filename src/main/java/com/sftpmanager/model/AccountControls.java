@@ -14,6 +14,13 @@ public class AccountControls {
     @Column(name = "plan", nullable = false)
     private String plan;
 
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    // Monthly price in cents (e.g. 2900 = $29.00). Null/0 = free, never billed.
+    @Column(name = "monthly_price_cents")
+    private Long monthlyPriceCents;
+
     @Column(name = "max_users")
     private Integer maxUsers;
 
@@ -69,6 +76,20 @@ public class AccountControls {
 
     public void setPlan(String plan) {
         this.plan = plan;
+    }
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+    public Long getMonthlyPriceCents() {
+        return monthlyPriceCents;
+    }
+
+    public void setMonthlyPriceCents(Long monthlyPriceCents) {
+        this.monthlyPriceCents = monthlyPriceCents;
     }
     public Integer getMaxUsers() {
         return maxUsers;

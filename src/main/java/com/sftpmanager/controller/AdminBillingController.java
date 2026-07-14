@@ -88,8 +88,10 @@ public class AdminBillingController {
             return ResponseEntity.badRequest().body(Map.of("error", "Not in mock mode"));
         }
         try {
+            // CVC is validated then discarded — never stored (PCI DSS)
             String pmId = mock.saveMockCard(
-                body.getOrDefault("cardNumber", ""), body.getOrDefault("expiry", ""));
+                body.getOrDefault("cardNumber", ""), body.getOrDefault("expiry", ""),
+                body.getOrDefault("cvc", ""));
             billingService.attachCard(user, normalizeSlot(body.get("slot")), pmId);
             return ResponseEntity.ok(Map.of("success", true));
         } catch (PaymentGateway.GatewayException e) {

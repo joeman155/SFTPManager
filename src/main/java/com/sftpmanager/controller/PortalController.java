@@ -2,7 +2,6 @@ package com.sftpmanager.controller;
 
 import com.sftpmanager.model.*;
 import com.sftpmanager.repository.EmailVerificationRepository;
-import com.sftpmanager.repository.PlanRepository;
 import com.sftpmanager.model.EmailVerification;
 import com.sftpmanager.service.EmailService;
 import com.sftpmanager.repository.RuntimeSettingsRepository;
@@ -28,7 +27,7 @@ public class PortalController {
     private final SftpServiceRepository sftpServiceRepository;
     private final SftpServiceAccountRepository accountRepository;
     private final SftpServiceIpWhitelistRepository whitelistRepository;
-    private final PlanRepository planRepository;
+    private final AccountControlsRepository accountControlsRepository;
     private final RuntimeSettingsRepository runtimeSettingsRepository;
     private final EmailService emailService;
     private final EmailVerificationRepository verificationRepository;
@@ -38,7 +37,7 @@ public class PortalController {
                             SftpServiceRepository sftpServiceRepository,
                             SftpServiceAccountRepository accountRepository,
                             SftpServiceIpWhitelistRepository whitelistRepository,
-                            PlanRepository planRepository,
+                            AccountControlsRepository accountControlsRepository,
                             RuntimeSettingsRepository runtimeSettingsRepository,
                             EmailService emailService,
                             EmailVerificationRepository verificationRepository) {
@@ -47,7 +46,7 @@ public class PortalController {
         this.sftpServiceRepository = sftpServiceRepository;
         this.accountRepository = accountRepository;
         this.whitelistRepository = whitelistRepository;
-        this.planRepository = planRepository;
+        this.accountControlsRepository = accountControlsRepository;
         this.runtimeSettingsRepository = runtimeSettingsRepository;
         this.emailService = emailService;
         this.verificationRepository = verificationRepository;
@@ -435,8 +434,8 @@ public class PortalController {
             return ResponseEntity.ok(Map.of("onboarded", true));
         }
 
-        // Get plans
-        List<Plan> plans = planRepository.findAll();
+        // Plans live in account_controls (name, description, monthly price, limits)
+        List<AccountControls> plans = accountControlsRepository.findAll();
 
         // Get T&C from runtime settings
         String tc = runtimeSettingsRepository.findByName("termsandconditions")
@@ -461,10 +460,10 @@ public class PortalController {
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) return ResponseEntity.status(404).build();
 
-        // Set plan
-        Integer planId = body.get("planId") != null ? Integer.valueOf(body.get("planId").toString()) : null;
+        // Set plan (an AccountControls row)
+        Long planId = body.get("planId") != null ? Long.valueOf(body.get("planId").toString()) : null;
         if (planId != null) {
-            planRepository.findById(planId).ifPresent(user::setPlan);
+            accountControlsRepository.findById(planId).ifPresent(user::setAccountControls);
         }
 
         // Card saving now happens through /portal/api/billing before this call.

@@ -1,8 +1,8 @@
 package com.sftpmanager.config;
 
-import com.sftpmanager.model.Plan;
+import com.sftpmanager.model.AccountControls;
 import com.sftpmanager.model.RuntimeSettings;
-import com.sftpmanager.repository.PlanRepository;
+import com.sftpmanager.repository.AccountControlsRepository;
 import com.sftpmanager.repository.RuntimeSettingsRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -10,31 +10,37 @@ import org.springframework.stereotype.Component;
 @Component
 public class DataInitialiser implements CommandLineRunner {
 
-    private final PlanRepository planRepository;
+    private final AccountControlsRepository accountControlsRepository;
     private final RuntimeSettingsRepository runtimeSettingsRepository;
 
-    public DataInitialiser(PlanRepository planRepository,
+    public DataInitialiser(AccountControlsRepository accountControlsRepository,
                            RuntimeSettingsRepository runtimeSettingsRepository) {
-        this.planRepository = planRepository;
+        this.accountControlsRepository = accountControlsRepository;
         this.runtimeSettingsRepository = runtimeSettingsRepository;
     }
 
     @Override
     public void run(String... args) {
 
-        // Seed plans if empty
-        if (planRepository.count() == 0) {
-            Plan basic = new Plan();
-            basic.setName("Basic");
+        // Seed plans (account controls) if empty
+        if (accountControlsRepository.count() == 0) {
+            AccountControls basic = new AccountControls();
+            basic.setPlan("Basic");
             basic.setDescription("Up to 5 SFTP services. 10GB storage. Email support. Perfect for individuals and small teams.");
             basic.setMonthlyPriceCents(2900L);
-            planRepository.save(basic);
+            basic.setMaxUsers(5);
+            basic.setMaxServers(5);
+            basic.setCreatedBy("system");
+            basic.setLastUpdatedBy("system");
+            accountControlsRepository.save(basic);
 
-            Plan enterprise = new Plan();
-            enterprise.setName("Enterprise");
+            AccountControls enterprise = new AccountControls();
+            enterprise.setPlan("Enterprise");
             enterprise.setDescription("Unlimited SFTP services. 1TB storage. Priority 24/7 support. Advanced security features. Ideal for growing businesses.");
             enterprise.setMonthlyPriceCents(9900L);
-            planRepository.save(enterprise);
+            enterprise.setCreatedBy("system");
+            enterprise.setLastUpdatedBy("system");
+            accountControlsRepository.save(enterprise);
         }
 
         // Seed SFTP host

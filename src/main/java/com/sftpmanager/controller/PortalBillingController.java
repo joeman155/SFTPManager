@@ -105,7 +105,8 @@ public class PortalBillingController {
             }
             String slot = normalizeSlot(body.get("slot"));
             try {
-                String pmId = mock.saveMockCard(nz(body.get("cardNumber")), nz(body.get("expiry")));
+                // CVC is validated then discarded — never stored (PCI DSS)
+                String pmId = mock.saveMockCard(nz(body.get("cardNumber")), nz(body.get("expiry")), nz(body.get("cvc")));
                 billingService.attachCard(user, slot, pmId);
                 return ResponseEntity.ok(Map.of("success", true));
             } catch (PaymentGateway.GatewayException e) {

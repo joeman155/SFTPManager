@@ -657,6 +657,9 @@ function renderAccountsModal(svcName, rows) {
             <button class="btn btn-primary btn-sm" onclick="openAccountForm()"><i class="bi bi-plus-lg me-1"></i>Add Account</button>
         </div>
         <div id="accounts-list">${list}</div>
+        <div class="d-flex justify-content-end mt-3">
+            <button class="btn btn-secondary btn-sm" onclick="closeSubModal()">Done</button>
+        </div>
     `);
 }
 
@@ -807,6 +810,9 @@ function renderWhitelistModal(svcName, rows) {
             <button class="btn btn-primary btn-sm" onclick="openIpForm()"><i class="bi bi-plus-lg me-1"></i>Add IP Rule</button>
         </div>
         <div id="ip-list">${list}</div>
+        <div class="d-flex justify-content-end mt-3">
+            <button class="btn btn-secondary btn-sm" onclick="closeSubModal()">Done</button>
+        </div>
     `);
 }
 
@@ -1059,8 +1065,8 @@ async function openAccount(e) {
     }
 
     // Show plan
-    document.getElementById('account-plan').innerHTML = user.plan
-        ? `<span class="plan-badge"><i class="bi bi-check-circle me-1"></i>${user.plan.name}</span>`
+    document.getElementById('account-plan').innerHTML = user.accountControls
+        ? `<span class="plan-badge"><i class="bi bi-check-circle me-1"></i>${user.accountControls.plan}${user.accountControls.monthlyPriceCents ? ` — $${(user.accountControls.monthlyPriceCents/100).toFixed(2)}/month` : ''}</span>`
         : `<span class="text-muted small">No plan selected</span>`;
 
     // Populate fields
@@ -1261,8 +1267,8 @@ async function mountCardForm(container, slot, onSaved) {
                            placeholder="Card number — try 4242 4242 4242 4242" oninput="formatCC(this)">
                 </div>
                 <div class="row g-2 mb-2">
-                    <div class="col-6"><input class="form-control form-control-sm" type="text" id="mock-cc-expiry" placeholder="MM/YY" maxlength="5"></div>
-                    <div class="col-6"><input class="form-control form-control-sm" type="text" id="mock-cc-cvc" placeholder="CVC" maxlength="4"></div>
+                    <div class="col-6"><input class="form-control form-control-sm" type="text" id="mock-cc-expiry" placeholder="MM/YY" maxlength="5" inputmode="numeric" oninput="formatExpiry(this)"></div>
+                    <div class="col-6"><input class="form-control form-control-sm" type="text" id="mock-cc-cvc" placeholder="CVC" maxlength="4" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')"></div>
                 </div>
                 <div class="field-error mb-2" id="mock-cc-err"></div>
                 <div class="d-flex gap-2">
@@ -1321,18 +1327,41 @@ async function mountCardForm(container, slot, onSaved) {
     }
 }
 
+function cardFieldError(number, expiry, cvc) {
+    const digits = number.replace(/\s/g, '');
+    if (!/^\d{13,19}$/.test(digits)) return 'Invalid card number';
+    let sum = 0, alt = false;
+    for (let i = digits.length - 1; i >= 0; i--) {
+        let d = parseInt(digits[i]);
+        if (alt) { d *= 2; if (d > 9) d -= 9; }
+        sum += d; alt = !alt;
+    }
+    if (sum % 10 !== 0) return 'Invalid card number';
+    if (!/^\d{2}\/\d{2}$/.test(expiry)) return 'Expiry must be MM/YY';
+    const [m, y] = expiry.split('/').map(Number);
+    if (m < 1 || m > 12) return 'Invalid expiry month';
+    if (new Date(2000 + y, m, 0) < new Date()) return 'Card has expired';
+    if (!/^\d{3,4}$/.test(cvc)) return 'Security code (CVC) must be 3 or 4 digits';
+    return null;
+}
+
+function formatExpiry(input) {
+    let v = input.value.replace(/\D/g, '').substring(0, 4);
+    input.value = v.length > 2 ? v.substring(0, 2) + '/' + v.substring(2) : v;
+}
+
 async function saveMockCard(slot) {
     const number = document.getElementById('mock-cc-number').value;
     const expiry = document.getElementById('mock-cc-expiry').value;
     const cvc = document.getElementById('mock-cc-cvc').value;
     const err = document.getElementById('mock-cc-err');
-    if (!/^\d{13,19}$/.test(number.replace(/\s/g, ''))) { err.textContent = 'Invalid card number'; return; }
-    if (!/^\d{2}\/\d{2}$/.test(expiry)) { err.textContent = 'Expiry must be MM/YY'; return; }
-    if (!/^\d{3,4}$/.test(cvc)) { err.textContent = 'Invalid CVC'; return; }
+    const fieldErr = cardFieldError(number, expiry, cvc);
+    if (fieldErr) { err.textContent = fieldErr; return; }
     err.textContent = '';
+    // CVC goes along for verification only — the server validates and discards it
     const r = await fetch('/portal/api/billing/mock-save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slot: slot, cardNumber: number, expiry: expiry })
+        body: JSON.stringify({ slot: slot, cardNumber: number, expiry: expiry, cvc: cvc })
     });
     if (r.ok) {
         const container = document.getElementById('mock-cc-number').closest('div.border').parentElement;
@@ -1359,8 +1388,8 @@ async function checkOnboarding() {
     // Render plans
     document.getElementById('plan-list').innerHTML = obPlans.map(p => `
         <div class="plan-card" id="plan-${p.id}" onclick="selectPlan(${p.id})">
-            <h6>${p.name}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}</h6>
-            <p class="text-muted small mb-0">${p.description}</p>
+            <h6>${p.plan}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}</h6>
+            <p class="text-muted small mb-0">${p.description||''}</p>
         </div>`).join('');
 
     // Render T&C
@@ -1373,8 +1402,8 @@ async function checkOnboarding() {
     // Render plans
     document.getElementById('plan-list').innerHTML = obPlans.map(p => `
         <div class="plan-card" id="plan-${p.id}" onclick="selectPlan(${p.id})">
-            <h6>${p.name}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}</h6>
-            <p class="text-muted small mb-0">${p.description}</p>
+            <h6>${p.plan}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}</h6>
+            <p class="text-muted small mb-0">${p.description||''}</p>
         </div>`).join('');
     document.getElementById('tc-content').innerHTML = data.termsAndConditions || '';
 

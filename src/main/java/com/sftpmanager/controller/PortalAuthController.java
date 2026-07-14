@@ -34,6 +34,9 @@ public class PortalAuthController {
     @Value("${recaptcha.secret-key:}")
     private String recaptchaSecretKey;
 
+    @Value("${app.support-email:support@leederville.net}")
+    private String supportEmail;
+
     public PortalAuthController(UserRepository userRepository,
                                 EmailVerificationRepository verificationRepository,
                                 PasswordResetRepository passwordResetRepository,
@@ -67,6 +70,12 @@ public class PortalAuthController {
         }
     }
 
+    /** Public config for the login page (this path is permitAll). */
+    @GetMapping("/config")
+    public ResponseEntity<?> authConfig() {
+        return ResponseEntity.ok(Map.of("supportEmail", supportEmail));
+    }
+
     @PostMapping("/check-email")
     public ResponseEntity<?> checkEmail(@RequestBody Map<String, String> body) {
         String email = body.get("email");
@@ -95,7 +104,7 @@ public class PortalAuthController {
             // Check locked
             if (Boolean.TRUE.equals(user.getLocked())) {
                 return ResponseEntity.status(403).body(Map.of(
-                    "error", "Account is locked due to too many failed login attempts. Please contact support."
+                    "error", "Account is locked. Please contact " + supportEmail + "."
                 ));
             }
 
@@ -110,7 +119,7 @@ public class PortalAuthController {
                         user.setLocked(true);
                         userRepository.save(user);
                         return ResponseEntity.status(403).body(Map.of(
-                            "error", "Account locked after " + MAX_ATTEMPTS + " failed attempts. Please contact support."
+                            "error", "Account locked after " + MAX_ATTEMPTS + " failed attempts. Please contact " + supportEmail + "."
                         ));
                     }
                     userRepository.save(user);

@@ -123,5 +123,6 @@ not locked, have a plan with a price and a saved card, and whose `paid_to_date`
 is today or earlier. Each gets charged one month of their plan (primary card,
 backup on failure). Success advances `paid_to_date` by one month; failure emails
 the user, and the existing trial-expiry job deactivates them the following day
-if still unpaid. Plan prices are in the `plans` table (`monthly_price_cents`,
-seeded: Basic $29, Enterprise $99 — change them there).
+if still unpaid. Plan prices live in the `account_controls` table
+(`monthly_price_cents`, seeded: Basic $29, Enterprise $99) — editable from the
+admin screen's Account Controls page.

@@ -114,10 +114,7 @@ public class User {
     @Column(name = "paid_to_date")
     private LocalDate paidToDate;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "plan_id")
-    private Plan plan;
-
+    // The user's plan (name, price, limits) lives in AccountControls
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "account_controls_id")
     private AccountControls accountControls;
@@ -204,8 +201,6 @@ public class User {
     public void setTrialWarningSent(Boolean v) { this.trialWarningSent = v; }
     public LocalDate getPaidToDate() { return paidToDate; }
     public void setPaidToDate(LocalDate v) { this.paidToDate = v; }
-    public Plan getPlan() { return plan; }
-    public void setPlan(Plan v) { this.plan = v; }
     public AccountControls getAccountControls() { return accountControls; }
     public void setAccountControls(AccountControls v) { this.accountControls = v; }
     public LocalDateTime getCreationDate() { return creationDate; }
