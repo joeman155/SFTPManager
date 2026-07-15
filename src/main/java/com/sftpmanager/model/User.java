@@ -102,6 +102,10 @@ public class User {
     @Column(name = "locked", nullable = false)
     private Boolean locked = false;
 
+    // Set when the user closes their own account; blocks all logins
+    @Column(name = "account_closed", nullable = false)
+    private Boolean accountClosed = false;
+
     @Column(name = "failed_login_attempts")
     private Integer failedLoginAttempts = 0;
 
@@ -193,6 +197,8 @@ public class User {
     public void setServicesDeactivated(Boolean v) { this.servicesDeactivated = v; }
     public Boolean getLocked() { return locked; }
     public void setLocked(Boolean v) { this.locked = v; }
+    public Boolean getAccountClosed() { return accountClosed; }
+    public void setAccountClosed(Boolean v) { this.accountClosed = v; }
     public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
     public void setFailedLoginAttempts(Integer v) { this.failedLoginAttempts = v; }
     public LocalDate getTrialExpires() { return trialExpires; }

@@ -68,7 +68,7 @@
         </div>
         <div class="table-card">
             <table class="table table-hover mb-0">
-                <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Company</th><th>Plan</th><th>Country</th><th>Active</th><th>Locked</th><th>SFTP Services</th><th></th></tr></thead>
+                <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Company</th><th>Plan</th><th>Country</th><th>Active</th><th>Locked</th><th>Account</th><th>SFTP Services</th><th></th></tr></thead>
                 <tbody id="users-tbody"></tbody>
             </table>
         </div>
@@ -127,7 +127,7 @@
         </div>
         <div class="table-card">
             <table class="table table-hover mb-0">
-                <thead class="table-light"><tr><th>Plan</th><th>Monthly Price</th><th>Max Users</th><th>Max Servers</th><th>Users on Plan</th><th></th></tr></thead>
+                <thead class="table-light"><tr><th>Plan</th><th>Monthly Price</th><th>Trial</th><th>Max Users</th><th>Max Servers</th><th>Users on Plan</th><th></th></tr></thead>
                 <tbody id="controls-tbody"></tbody>
             </table>
         </div>
@@ -370,7 +370,11 @@ async function adminOpenCardForm(userId, slot) {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({ slot: slot, paymentMethodId: result.setupIntent.payment_method })
             });
-            if (attach.ok) { await loadUsers(); openBilling(userId); }
+            if (attach.ok) {
+                const data = await attach.json().catch(()=>({}));
+                if (data.paymentWarning) alert(data.paymentWarning);
+                await loadUsers(); openBilling(userId);
+            }
             else {
                 const e = await attach.json().catch(()=>({}));
                 document.getElementById('adm-cc-err').textContent = e.error || 'Could not save card';
@@ -418,7 +422,11 @@ async function adminSaveMockCard(userId, slot) {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ slot: slot, cardNumber: number, expiry: expiry, cvc: cvc })
     });
-    if (r.ok) { await loadUsers(); openBilling(userId); }
+    if (r.ok) {
+        const data = await r.json().catch(()=>({}));
+        if (data.paymentWarning) alert(data.paymentWarning);
+        await loadUsers(); openBilling(userId);
+    }
     else {
         const e = await r.json().catch(()=>({}));
         err.textContent = e.error || 'Could not save card';
@@ -469,6 +477,21 @@ async function toggleUserLock(userId, unlocked) {
     loadUsers();
 }
 
+async function toggleUserClosed(userId, open) {
+    // open=true means checkbox is checked = account is NOT closed
+    if (!open && !confirm('Close this account? The user will be signed out and unable to log in until re-opened.')) {
+        loadUsers();
+        return;
+    }
+    const r = await fetch(`${API}/users/${userId}`, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ accountClosed: !open })
+    });
+    if (!r.ok) { alert('Failed to update account status'); }
+    loadUsers();
+}
+
 async function toggleUserDeactivated(userId, deactivated) {
     const body = { servicesDeactivated: deactivated };
     const r = await fetch(`${API}/users/${userId}`, {
@@ -488,7 +511,7 @@ async function loadUsers() {
     allUsers = users;
     allControls = controls;
     const tbody = document.getElementById('users-tbody');
-    if (!users.length) { empty('users-tbody', 7); return; }
+    if (!users.length) { empty('users-tbody', 10); return; }
     tbody.innerHTML = users.map(u => `<tr>
         <td>${u.firstName||''} ${u.surname||''}</td>
         <td>${u.email||''}</td>
@@ -509,6 +532,14 @@ async function loadUsers() {
                     onchange="toggleUserLock(${u.id}, this.checked)"
                     title="${u.locked?'Click to unlock':'Account is unlocked'}">
                 <label class="form-check-label small">${u.locked?'<span class=\"text-danger\">Locked</span>':'<span class=\"text-success\">OK</span>'}</label>
+            </div>
+        </td>
+        <td>
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" ${u.accountClosed?'':'checked'}
+                    onchange="toggleUserClosed(${u.id}, this.checked)"
+                    title="${u.accountClosed?'Click to re-open this account':'Account is open'}">
+                <label class="form-check-label small">${u.accountClosed?'<span class=\"text-danger\">Closed</span>':'<span class=\"text-success\">Open</span>'}</label>
             </div>
         </td>
         <td><a href="#" class="text-decoration-none text-primary" onclick="drillSftpByUser(${u.id},'${(u.firstName||'')+' '+(u.surname||'')}')">
@@ -599,12 +630,13 @@ async function loadControls() {
     ]);
     allControls = controls;
     const tbody = document.getElementById('controls-tbody');
-    if (!controls.length) { empty('controls-tbody', 6); return; }
+    if (!controls.length) { empty('controls-tbody', 7); return; }
     tbody.innerHTML = controls.map(c => {
         const usersOnPlan = users.filter(u => u.accountControls && u.accountControls.id === c.id).length;
         return `<tr>
             <td><span class="badge bg-info-subtle text-info" title="${c.description||''}">${c.plan||''}</span></td>
             <td>${c.monthlyPriceCents ? '$' + (c.monthlyPriceCents/100).toFixed(2) : '—'}</td>
+            <td>${c.trialDays ? c.trialDays + ' days' : '—'}</td>
             <td>${c.maxUsers||'—'}</td>
             <td>${c.maxServers||'—'}</td>
             <td>${usersOnPlan}</td>
@@ -1082,6 +1114,7 @@ function openControlsForm(data={}) {
             ${fld('Monthly Price ($)','ctrlPrice','number','e.g. 29.00')}
             ${fld('Max Users','ctrlMaxUsers','number','e.g. 50',true)}
             ${fld('Max Servers','ctrlMaxServers','number','e.g. 10',true)}
+            ${fld('Trial Days (blank = not a trial)','ctrlTrialDays','number','e.g. 7')}
             <div class="col-12 mb-3">
                 <label class="form-label small fw-semibold">Description <span class="text-muted fw-normal">(shown to customers when choosing a plan)</span></label>
                 <textarea class="form-control form-control-sm" id="ctrlDesc" rows="2"></textarea>
@@ -1093,18 +1126,21 @@ function openControlsForm(data={}) {
         setVal('ctrlPlan', data.plan); setVal('ctrlMaxUsers', data.maxUsers); setVal('ctrlMaxServers', data.maxServers);
         setVal('ctrlDesc', data.description);
         setVal('ctrlPrice', data.monthlyPriceCents != null ? (data.monthlyPriceCents/100).toFixed(2) : '');
+        setVal('ctrlTrialDays', data.trialDays != null ? data.trialDays : '');
     }
 }
 
 async function saveControls() {
     if (!validateForm([['ctrlPlan', V.required], ['ctrlMaxUsers', V.required], ['ctrlMaxServers', V.required]])) return;
     const price = getVal('ctrlPrice');
+    const trialDays = getVal('ctrlTrialDays');
     const body = {
         plan: getVal('ctrlPlan'),
         description: getVal('ctrlDesc') || null,
         monthlyPriceCents: price !== '' && !isNaN(parseFloat(price)) ? Math.round(parseFloat(price) * 100) : null,
         maxUsers: parseInt(getVal('ctrlMaxUsers')),
-        maxServers: parseInt(getVal('ctrlMaxServers'))
+        maxServers: parseInt(getVal('ctrlMaxServers')),
+        trialDays: trialDays !== '' && !isNaN(parseInt(trialDays)) ? parseInt(trialDays) : null
     };
     const url = editingId ? `${API}/accountcontrols/${editingId}` : `${API}/accountcontrols`;
     const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});

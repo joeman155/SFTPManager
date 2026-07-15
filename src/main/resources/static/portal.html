@@ -289,6 +289,17 @@
                 </div>
             </div>
 
+            <!-- Close Account -->
+            <div class="account-section">
+                <h6 class="text-danger">Close Account</h6>
+                <p class="text-muted small mb-2">Closing your account signs you out immediately and
+                prevents any further logins. Your SFTP services will stop being available.
+                Contact support if you later wish to reopen it.</p>
+                <button class="btn btn-outline-danger btn-sm" onclick="closeMyAccount()">
+                    <i class="bi bi-x-octagon me-1"></i>Close my account
+                </button>
+            </div>
+
             <div class="d-flex justify-content-end gap-2 pt-2 border-top">
                 <button class="btn btn-secondary btn-sm" onclick="closeAccount()">Cancel</button>
                 <button class="btn btn-primary btn-sm" onclick="saveAccount()">Save changes</button>
@@ -1149,6 +1160,19 @@ function closeAccount() {
     document.getElementById('account-modal-overlay').style.display = 'none';
 }
 
+async function closeMyAccount() {
+    if (!confirm('Do you really want to close your account?\n\n'
+        + 'Your SFTP services will stop being available and you will be signed out immediately. '
+        + 'You will not be able to log in again unless support reopens your account.')) return;
+    const r = await fetch('/portal/api/account/close', { method: 'POST' });
+    if (r.ok) {
+        alert('Your account has been closed. You will now be signed out.');
+        window.location.href = '/portal/login';
+    } else {
+        alert('Could not close your account. Please try again or contact support.');
+    }
+}
+
 async function saveAccount() {
     // Required fields
     const firstName = document.getElementById('ac-first-name').value.trim();
@@ -1315,7 +1339,11 @@ async function mountCardForm(container, slot, onSaved) {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ slot: slot, paymentMethodId: result.setupIntent.payment_method })
             });
-            if (attach.ok) { onSaved(); }
+            if (attach.ok) {
+                const data = await attach.json().catch(() => ({}));
+                if (data.paymentWarning) alert(data.paymentWarning);
+                onSaved();
+            }
             else {
                 const e = await attach.json().catch(() => ({}));
                 document.getElementById('stripe-cc-err').textContent = e.error || 'Could not save card';
@@ -1364,6 +1392,8 @@ async function saveMockCard(slot) {
         body: JSON.stringify({ slot: slot, cardNumber: number, expiry: expiry, cvc: cvc })
     });
     if (r.ok) {
+        const data = await r.json().catch(() => ({}));
+        if (data.paymentWarning) alert(data.paymentWarning);
         const container = document.getElementById('mock-cc-number').closest('div.border').parentElement;
         if (container._onSaved) container._onSaved();
     } else {
@@ -1388,7 +1418,7 @@ async function checkOnboarding() {
     // Render plans
     document.getElementById('plan-list').innerHTML = obPlans.map(p => `
         <div class="plan-card" id="plan-${p.id}" onclick="selectPlan(${p.id})">
-            <h6>${p.plan}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}</h6>
+            <h6>${p.plan}${p.trialDays ? ` — Free for ${p.trialDays} days` : (p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : '')}</h6>
             <p class="text-muted small mb-0">${p.description||''}</p>
         </div>`).join('');
 
@@ -1402,7 +1432,7 @@ async function checkOnboarding() {
     // Render plans
     document.getElementById('plan-list').innerHTML = obPlans.map(p => `
         <div class="plan-card" id="plan-${p.id}" onclick="selectPlan(${p.id})">
-            <h6>${p.plan}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}</h6>
+            <h6>${p.plan}${p.trialDays ? ` — Free for ${p.trialDays} days` : (p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : '')}</h6>
             <p class="text-muted small mb-0">${p.description||''}</p>
         </div>`).join('');
     document.getElementById('tc-content').innerHTML = data.termsAndConditions || '';
@@ -1448,10 +1478,16 @@ function onObCardSaved() {
     document.getElementById('ob-skip-btn').style.display = 'none';
 }
 
+function isTrialPlanSelected() {
+    const p = obPlans.find(x => x.id === obData.planId);
+    return !!(p && p.trialDays);
+}
+
 function obNext() {
     if (obStep === 1) {
         if (!obData.planId) { alert('Please select a plan to continue.'); return; }
-        updateObStep(2);
+        // Trial plans are free — skip the payment step entirely
+        updateObStep(isTrialPlanSelected() ? 3 : 2);
     } else if (obStep === 2) {
         // Card saving happens inside the card widget (Save card button).
         // Moving on without a saved card means the 7-day trial applies.
@@ -1476,7 +1512,10 @@ function obNext() {
 }
 
 function obBack() {
-    if (obStep > 1) updateObStep(obStep - 1);
+    if (obStep <= 1) return;
+    // The payment step was skipped for trial plans — skip it on the way back too
+    if (obStep === 3 && isTrialPlanSelected()) { updateObStep(1); return; }
+    updateObStep(obStep - 1);
 }
 
 function obSkipCC() {
@@ -1499,6 +1538,8 @@ async function submitOnboarding() {
         })
     });
     if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.paymentWarning) alert(data.paymentWarning);
         document.getElementById('onboarding-overlay').style.display = 'none';
         await loadServices();
         // Redirect straight to creating their first SFTP service

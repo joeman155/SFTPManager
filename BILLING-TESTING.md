@@ -116,13 +116,20 @@ deducted from the payment itself. Test mode and mock mode are free forever.
 | Brand, last 4, expiry (display only) | Cardholder name (Stripe keeps it) |
 | Payment records (amount, status, failure reason) | |
 
-## How automated billing works
+## How billing works
 
-Nightly at 02:30 the `BillingScheduler` finds users who are onboarded, active,
-not locked, have a plan with a price and a saved card, and whose `paid_to_date`
-is today or earlier. Each gets charged one month of their plan (primary card,
-backup on failure). Success advances `paid_to_date` by one month; failure emails
-the user, and the existing trial-expiry job deactivates them the following day
-if still unpaid. Plan prices live in the `account_controls` table
-(`monthly_price_cents`, seeded: Basic $29, Enterprise $99) — editable from the
-admin screen's Account Controls page.
+**First month — charged immediately.** When a user signs up on a priced plan
+with a card (or adds a card later while unpaid), the first month is charged in
+real time. Only if the payment succeeds is the account activated and
+`paid_to_date` set one month out. If it fails, the card is still saved, the
+user sees a warning, and they get a 7-day grace period to fix their payment
+details. Users who pick the free "7 Day Trial" plan are never charged.
+
+**Renewals — nightly at 02:30.** The `BillingScheduler` finds users who are
+onboarded, active, not locked, not closed, have a priced plan and a saved card,
+and whose `paid_to_date` is today or earlier. Each gets charged one month
+(primary card, backup on failure). Success advances `paid_to_date` by one
+month; failure emails the user, and the trial-expiry job deactivates them the
+following day if still unpaid. Plan prices live in the `account_controls`
+table (`monthly_price_cents`, seeded: Basic $29, Enterprise $99) — editable
+from the admin screen's Account Controls page.

@@ -101,6 +101,13 @@ public class PortalAuthController {
         if (existing.isPresent()) {
             User user = existing.get();
 
+            // Check closed
+            if (Boolean.TRUE.equals(user.getAccountClosed())) {
+                return ResponseEntity.status(403).body(Map.of(
+                    "error", "This account has been closed. Please contact " + supportEmail + " if you wish to reopen it."
+                ));
+            }
+
             // Check locked
             if (Boolean.TRUE.equals(user.getLocked())) {
                 return ResponseEntity.status(403).body(Map.of(

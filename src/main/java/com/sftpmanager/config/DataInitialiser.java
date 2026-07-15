@@ -24,12 +24,23 @@ public class DataInitialiser implements CommandLineRunner {
 
         // Seed plans (account controls) if empty
         if (accountControlsRepository.count() == 0) {
+            AccountControls trial = new AccountControls();
+            trial.setPlan("7 Day Trial");
+            trial.setDescription("Try SFTP Manager free for 7 days. 1 SFTP service. 10GB storage. Email support. No credit card required.");
+            trial.setMonthlyPriceCents(null); // free — never billed
+            trial.setMaxUsers(5);
+            trial.setMaxServers(1);
+            trial.setTrialDays(7);
+            trial.setCreatedBy("system");
+            trial.setLastUpdatedBy("system");
+            accountControlsRepository.save(trial);
+
             AccountControls basic = new AccountControls();
             basic.setPlan("Basic");
-            basic.setDescription("Up to 5 SFTP services. 10GB storage. Email support. Perfect for individuals and small teams.");
+            basic.setDescription("1 SFTP service. 10GB storage. Email support. Perfect for individuals and small teams.");
             basic.setMonthlyPriceCents(2900L);
             basic.setMaxUsers(5);
-            basic.setMaxServers(5);
+            basic.setMaxServers(1);
             basic.setCreatedBy("system");
             basic.setLastUpdatedBy("system");
             accountControlsRepository.save(basic);

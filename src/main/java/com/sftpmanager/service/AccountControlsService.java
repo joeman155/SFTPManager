@@ -30,6 +30,7 @@ public class AccountControlsService {
             existing.setMonthlyPriceCents(updated.getMonthlyPriceCents());
             existing.setMaxUsers(updated.getMaxUsers());
             existing.setMaxServers(updated.getMaxServers());
+            existing.setTrialDays(updated.getTrialDays());
             existing.setLastUpdatedBy(updated.getLastUpdatedBy());
             return repository.save(existing);
         }).orElseThrow(() -> new RuntimeException("AccountControls not found: " + id));

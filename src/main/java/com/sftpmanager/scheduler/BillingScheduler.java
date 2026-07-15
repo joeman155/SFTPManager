@@ -68,6 +68,7 @@ public class BillingScheduler {
         for (User user : users) {
             if (!Boolean.TRUE.equals(user.getOnboarded())) continue;
             if (Boolean.TRUE.equals(user.getLocked())) continue;
+            if (Boolean.TRUE.equals(user.getAccountClosed())) continue;
             if (Boolean.TRUE.equals(user.getServicesDeactivated())) continue;
             if (user.getPaidToDate() == null || user.getPaidToDate().isAfter(today)) continue;
             if (user.getAccountControls() == null || user.getAccountControls().getMonthlyPriceCents() == null

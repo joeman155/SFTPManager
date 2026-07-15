@@ -68,6 +68,9 @@ public class UserController {
             if (updates.containsKey("servicesDeactivated")) {
                 user.setServicesDeactivated(Boolean.TRUE.equals(updates.get("servicesDeactivated")));
             }
+            if (updates.containsKey("accountClosed")) {
+                user.setAccountClosed(Boolean.TRUE.equals(updates.get("accountClosed")));
+            }
             return ResponseEntity.ok(userService.save(user, null));
         }).orElse(ResponseEntity.notFound().build());
     }

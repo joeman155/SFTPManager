@@ -38,7 +38,8 @@ public class PortalBillingController {
             : (session != null ? (String) session.getAttribute("EMAIL_AUTH_USER") : null);
         if (email == null) return Optional.empty();
         return userRepository.findByEmail(email)
-            .filter(u -> !Boolean.TRUE.equals(u.getLocked()));
+            .filter(u -> !Boolean.TRUE.equals(u.getLocked()))
+            .filter(u -> !Boolean.TRUE.equals(u.getAccountClosed()));
     }
 
     @GetMapping("/config")
@@ -86,8 +87,8 @@ public class PortalBillingController {
             if (pmId == null || pmId.isBlank())
                 return ResponseEntity.badRequest().body(Map.of("error", "paymentMethodId required"));
             try {
-                billingService.attachCard(user, slot, pmId);
-                return ResponseEntity.ok(Map.of("success", true));
+                var outcome = billingService.attachCard(user, slot, pmId);
+                return ResponseEntity.ok(attachResponse(outcome));
             } catch (PaymentGateway.GatewayException e) {
                 return ResponseEntity.status(502).body(Map.of("error", e.getMessage()));
             }
@@ -107,8 +108,8 @@ public class PortalBillingController {
             try {
                 // CVC is validated then discarded — never stored (PCI DSS)
                 String pmId = mock.saveMockCard(nz(body.get("cardNumber")), nz(body.get("expiry")), nz(body.get("cvc")));
-                billingService.attachCard(user, slot, pmId);
-                return ResponseEntity.ok(Map.of("success", true));
+                var outcome = billingService.attachCard(user, slot, pmId);
+                return ResponseEntity.ok(attachResponse(outcome));
             } catch (PaymentGateway.GatewayException e) {
                 return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
             }
@@ -128,6 +129,14 @@ public class PortalBillingController {
     private static String normalizeSlot(String slot) {
         return BillingService.SLOT_BACKUP.equalsIgnoreCase(slot)
             ? BillingService.SLOT_BACKUP : BillingService.SLOT_PRIMARY;
+    }
+
+    /** Card is saved either way; a failed first-month charge comes back as a warning. */
+    private static Map<String, Object> attachResponse(BillingService.ChargeOutcome outcome) {
+        if (outcome == null) return Map.of("success", true);
+        if (outcome.succeeded()) return Map.of("success", true, "charged", true);
+        return Map.of("success", true, "charged", false,
+            "paymentWarning", "Card saved, but the payment failed: " + outcome.message());
     }
 
     private static String nz(String s) { return s == null ? "" : s; }

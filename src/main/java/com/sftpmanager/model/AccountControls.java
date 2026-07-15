@@ -27,6 +27,10 @@ public class AccountControls {
     @Column(name = "max_servers")
     private Integer maxServers;
 
+    // Non-null = this plan is a time-limited trial of that many days
+    @Column(name = "trial_days")
+    private Integer trialDays;
+
     @Column(name = "creation_date", updatable = false)
     private LocalDateTime creationDate;
 
@@ -104,6 +108,13 @@ public class AccountControls {
 
     public void setMaxServers(Integer maxServers) {
         this.maxServers = maxServers;
+    }
+    public Integer getTrialDays() {
+        return trialDays;
+    }
+
+    public void setTrialDays(Integer trialDays) {
+        this.trialDays = trialDays;
     }
     public LocalDateTime getCreationDate() {
         return creationDate;

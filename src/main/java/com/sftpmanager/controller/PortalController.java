@@ -31,6 +31,7 @@ public class PortalController {
     private final RuntimeSettingsRepository runtimeSettingsRepository;
     private final EmailService emailService;
     private final EmailVerificationRepository verificationRepository;
+    private final com.sftpmanager.service.BillingService billingService;
 
     public PortalController(PortalUserRepository portalUserRepository,
                             UserRepository userRepository,
@@ -40,7 +41,8 @@ public class PortalController {
                             AccountControlsRepository accountControlsRepository,
                             RuntimeSettingsRepository runtimeSettingsRepository,
                             EmailService emailService,
-                            EmailVerificationRepository verificationRepository) {
+                            EmailVerificationRepository verificationRepository,
+                            com.sftpmanager.service.BillingService billingService) {
         this.portalUserRepository = portalUserRepository;
         this.userRepository = userRepository;
         this.sftpServiceRepository = sftpServiceRepository;
@@ -50,6 +52,7 @@ public class PortalController {
         this.runtimeSettingsRepository = runtimeSettingsRepository;
         this.emailService = emailService;
         this.verificationRepository = verificationRepository;
+        this.billingService = billingService;
     }
 
     // ── Helper: resolve email from OAuth2 or email session ──
@@ -64,13 +67,14 @@ public class PortalController {
     }
 
     // ── Helper: get current User from OAuth principal or email session ──
-    // Locked accounts resolve to empty, so callers reject them the same way
-    // they reject an unauthenticated request — covers accounts locked mid-session.
+    // Locked and closed accounts resolve to empty, so callers reject them the
+    // same way they reject an unauthenticated request.
     private Optional<User> currentUser(OAuth2User principal, HttpSession session) {
         String email = resolveEmail(principal, session);
         if (email == null) return Optional.empty();
         return userRepository.findByEmail(email)
-            .filter(u -> !Boolean.TRUE.equals(u.getLocked()));
+            .filter(u -> !Boolean.TRUE.equals(u.getLocked()))
+            .filter(u -> !Boolean.TRUE.equals(u.getAccountClosed()));
     }
 
     // Keep old signature for backward compat with portalUser helper
@@ -112,7 +116,7 @@ public class PortalController {
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) return ResponseEntity.status(401).build();
 
-        if (Boolean.TRUE.equals(user.getLocked())) {
+        if (Boolean.TRUE.equals(user.getLocked()) || Boolean.TRUE.equals(user.getAccountClosed())) {
             session.invalidate();
             return ResponseEntity.status(401).build();
         }
@@ -183,7 +187,18 @@ public class PortalController {
     public ResponseEntity<?> createService(@AuthenticationPrincipal OAuth2User principal,
                                            @RequestBody SftpService service,
                                            HttpSession session) {
-        return currentUser(principal, session).map(user -> {
+        return currentUser(principal, session).<ResponseEntity<?>>map(user -> {
+            // Enforce the plan's server limit (null = unlimited)
+            AccountControls plan = user.getAccountControls();
+            if (plan != null && plan.getMaxServers() != null) {
+                long existing = sftpServiceRepository.findByUserId(user.getId()).size();
+                if (existing >= plan.getMaxServers()) {
+                    return ResponseEntity.status(403).body(Map.of("error",
+                        "Your " + plan.getPlan() + " plan allows a maximum of " + plan.getMaxServers()
+                        + " SFTP service" + (plan.getMaxServers() == 1 ? "" : "s")
+                        + ". Upgrade your plan to add more."));
+                }
+            }
             service.setUser(user);
             service.setCreatedBy(user.getEmail());
             service.setLastUpdatedBy(user.getEmail());
@@ -467,16 +482,27 @@ public class PortalController {
         }
 
         // Card saving now happens through /portal/api/billing before this call.
-        // Trust the server-side state, not the request body: a saved primary
-        // card means no trial is needed.
-        if (user.getCcPmId() != null) {
-            user.setTrialExpires(null);
+        // Trust the server-side state, not the request body.
+        String paymentWarning = null;
+        AccountControls selectedPlan = user.getAccountControls();
+        if (selectedPlan != null && selectedPlan.getTrialDays() != null && selectedPlan.getTrialDays() > 0) {
+            // Trial plan — time-limited, free, never billed
+            user.setTrialExpires(java.time.LocalDate.now().plusDays(selectedPlan.getTrialDays()));
+            user.setPaidToDate(null);
             user.setServicesDeactivated(false);
-            if (user.getPaidToDate() == null) {
-                user.setPaidToDate(java.time.LocalDate.now().plusDays(30));
+        } else if (user.getCcPmId() != null) {
+            // Paid plan with a saved card — charge the first month NOW.
+            // Activation/paidToDate is set inside chargeFirstMonthIfDue on success.
+            var outcome = billingService.chargeFirstMonthIfDue(user);
+            if (outcome != null && !outcome.succeeded()) {
+                // Payment failed — fall back to a 7 day grace period so the
+                // user can fix their card before services are cut off.
+                user.setTrialExpires(java.time.LocalDate.now().plusDays(7));
+                paymentWarning = "Your card could not be charged (" + outcome.message()
+                    + "). You have 7 days to update your payment details.";
             }
         } else {
-            // No card — 7 day trial
+            // Paid plan, no card yet — 7 day grace trial
             user.setTrialExpires(java.time.LocalDate.now().plusDays(7));
         }
 
@@ -493,10 +519,25 @@ public class PortalController {
         // Send welcome email
         emailService.sendWelcomeEmail(email, user.getFirstName());
 
-        return ResponseEntity.ok(Map.of("success", true));
+        return ResponseEntity.ok(paymentWarning != null
+            ? Map.of("success", true, "paymentWarning", paymentWarning)
+            : Map.of("success", true));
     }
 
     // ── Account ──
+
+    /** User closes their own account: flag it and end the session. */
+    @PostMapping("/account/close")
+    public ResponseEntity<?> closeAccount(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
+        return currentUser(principal, session).<ResponseEntity<?>>map(user -> {
+            user.setAccountClosed(true);
+            user.setLastUpdatedBy(user.getEmail());
+            userRepository.save(user);
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+            session.invalidate(); // logs them out (both Google and email sessions)
+            return ResponseEntity.ok(Map.of("success", true));
+        }).orElse(ResponseEntity.status(401).build());
+    }
 
     @GetMapping("/account")
     public ResponseEntity<?> getAccount(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {

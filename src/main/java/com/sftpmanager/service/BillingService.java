@@ -135,8 +135,13 @@ public class BillingService {
         return gateway.createSetupIntent(ensureCustomer(user));
     }
 
-    /** Store a tokenized card against the user (slot = PRIMARY or BACKUP). */
-    public void attachCard(User user, String slot, String paymentMethodId) throws GatewayException {
+    /**
+     * Store a tokenized card against the user (slot = PRIMARY or BACKUP).
+     * Saving a PRIMARY card on an unpaid, non-trial priced plan triggers an
+     * immediate first-month charge; the returned outcome is null when no
+     * charge was applicable.
+     */
+    public ChargeOutcome attachCard(User user, String slot, String paymentMethodId) throws GatewayException {
         PaymentGateway.CardDetails card = gateway.getCard(paymentMethodId);
         if (SLOT_BACKUP.equals(slot)) {
             user.setBackupCcPmId(paymentMethodId);
@@ -148,16 +153,45 @@ public class BillingService {
             user.setCcBrand(card.brand());
             user.setCcLast4(card.last4());
             user.setCcExpiry(card.expiry());
-            // Same business rule as the old raw-CC flow: adding a payment card
-            // ends the trial and (re)activates services.
-            user.setTrialExpires(null);
-            user.setServicesDeactivated(false);
-            if (user.getPaidToDate() == null || user.getPaidToDate().isBefore(LocalDate.now())) {
-                user.setPaidToDate(LocalDate.now().plusDays(30));
-            }
         }
         userRepository.save(user);
         log.info("BILLING: {} card saved for {} ({} •••• {})", slot, user.getEmail(), card.brand(), card.last4());
+
+        if (SLOT_BACKUP.equals(slot)) return null;
+        return chargeFirstMonthIfDue(user);
+    }
+
+    /**
+     * Charges the first month immediately when a user is on a priced,
+     * non-trial plan, has a card, and isn't already paid up. Activation
+     * (clearing the trial, reactivating services, setting paidToDate) only
+     * happens if the payment SUCCEEDS. Returns null if no charge was due.
+     */
+    public ChargeOutcome chargeFirstMonthIfDue(User user) {
+        var plan = user.getAccountControls();
+        if (plan == null) return null;                                        // no plan chosen yet (mid-onboarding)
+        if (plan.getTrialDays() != null && plan.getTrialDays() > 0) return null; // free trial plan — never billed
+        if (plan.getMonthlyPriceCents() == null || plan.getMonthlyPriceCents() <= 0) return null; // unpriced plan
+        if (user.getPaidToDate() != null && user.getPaidToDate().isAfter(LocalDate.now())) return null; // already covered
+        if (user.getCcPmId() == null && user.getBackupCcPmId() == null) return null; // no card
+
+        // Key includes the payment method so replacing a declined card allows a fresh attempt
+        String idempotency = "signup-" + user.getId() + "-" + (user.getCcPmId() != null ? user.getCcPmId() : user.getBackupCcPmId());
+        ChargeOutcome outcome = chargeUser(user,
+            plan.getMonthlyPriceCents(),
+            "SFTP Manager — " + plan.getPlan() + " plan, first month",
+            "SIGNUP", idempotency);
+
+        if (outcome.succeeded()) {
+            user.setTrialExpires(null);
+            user.setServicesDeactivated(false);
+            user.setPaidToDate(LocalDate.now().plusMonths(1));
+            userRepository.save(user);
+            log.info("BILLING: first month charged for {}, paid through {}", user.getEmail(), user.getPaidToDate());
+        } else {
+            log.warn("BILLING: first-month charge failed for {} — {}", user.getEmail(), outcome.message());
+        }
+        return outcome;
     }
 
     public void removeCard(User user, String slot) {

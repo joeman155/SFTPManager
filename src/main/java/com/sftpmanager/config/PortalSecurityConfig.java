@@ -65,22 +65,23 @@ public class PortalSecurityConfig {
         return http.build();
     }
 
-    // Blocks locked accounts from completing Google sign-in, mirroring the
-    // check PortalAuthController already does for the email/password path.
+    // Blocks locked and closed accounts from completing Google sign-in,
+    // mirroring the checks PortalAuthController does for email/password.
     private AuthenticationSuccessHandler portalSuccessHandler() {
         return (HttpServletRequest request, HttpServletResponse response, Authentication authentication) -> {
             OAuth2User principal = (OAuth2User) authentication.getPrincipal();
             String email = principal.getAttribute("email");
 
-            boolean locked = userRepository.findByEmail(email)
-                .map(user -> Boolean.TRUE.equals(user.getLocked()))
-                .orElse(false);
+            String block = userRepository.findByEmail(email)
+                .map(user -> Boolean.TRUE.equals(user.getAccountClosed()) ? "closed"
+                           : Boolean.TRUE.equals(user.getLocked()) ? "locked" : null)
+                .orElse(null);
 
-            if (locked) {
+            if (block != null) {
                 SecurityContextHolder.clearContext();
                 HttpSession session = request.getSession(false);
                 if (session != null) session.invalidate();
-                response.sendRedirect("/portal/login?error=locked");
+                response.sendRedirect("/portal/login?error=" + block);
             } else {
                 response.sendRedirect("/portal");
             }

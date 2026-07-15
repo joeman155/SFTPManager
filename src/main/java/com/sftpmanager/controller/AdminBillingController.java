@@ -72,8 +72,8 @@ public class AdminBillingController {
         if (pmId == null || pmId.isBlank())
             return ResponseEntity.badRequest().body(Map.of("error", "paymentMethodId required"));
         try {
-            billingService.attachCard(user, normalizeSlot(body.get("slot")), pmId);
-            return ResponseEntity.ok(Map.of("success", true));
+            var outcome = billingService.attachCard(user, normalizeSlot(body.get("slot")), pmId);
+            return ResponseEntity.ok(attachResponse(outcome));
         } catch (PaymentGateway.GatewayException e) {
             return ResponseEntity.status(502).body(Map.of("error", e.getMessage()));
         }
@@ -92,8 +92,8 @@ public class AdminBillingController {
             String pmId = mock.saveMockCard(
                 body.getOrDefault("cardNumber", ""), body.getOrDefault("expiry", ""),
                 body.getOrDefault("cvc", ""));
-            billingService.attachCard(user, normalizeSlot(body.get("slot")), pmId);
-            return ResponseEntity.ok(Map.of("success", true));
+            var outcome = billingService.attachCard(user, normalizeSlot(body.get("slot")), pmId);
+            return ResponseEntity.ok(attachResponse(outcome));
         } catch (PaymentGateway.GatewayException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -110,6 +110,14 @@ public class AdminBillingController {
     private static String normalizeSlot(String slot) {
         return BillingService.SLOT_BACKUP.equalsIgnoreCase(slot)
             ? BillingService.SLOT_BACKUP : BillingService.SLOT_PRIMARY;
+    }
+
+    /** Card is saved either way; a failed first-month charge comes back as a warning. */
+    private static Map<String, Object> attachResponse(BillingService.ChargeOutcome outcome) {
+        if (outcome == null) return Map.of("success", true);
+        if (outcome.succeeded()) return Map.of("success", true, "charged", true);
+        return Map.of("success", true, "charged", false,
+            "paymentWarning", "Card saved, but the payment failed: " + outcome.message());
     }
 
     @PostMapping("/charge/{userId}")
