@@ -1127,7 +1127,7 @@ function confirmUpgrade() {
         // Need a card first — mount the secure card widget, then complete the switch
         const area = document.getElementById('upgrade-card-area');
         area.style.display = 'block';
-        mountCardForm(area, 'PRIMARY', () => submitPlanChange(window._pendingUpgrade.id));
+        mountCardForm(area, 'PRIMARY', () => submitPlanChange(window._pendingUpgrade.id), true);
     }
 }
 
@@ -1159,6 +1159,7 @@ async function openAccount(e) {
     const userRes = await fetch('/portal/api/account');
     if (!userRes.ok) return;
     const user = await userRes.json();
+    window._accountUser = user; // used by openCardForm to decide if saving will charge
 
     // Show trial banner if applicable
     if (user.trialExpires) {
@@ -1363,15 +1364,25 @@ async function removeCard(slot) {
 function openCardForm(slot) {
     const area = document.getElementById('card-form-area');
     area.style.display = 'block';
-    mountCardForm(area, slot, () => { area.style.display = 'none'; area.innerHTML = ''; renderCards(); });
+    // Saving a primary card charges immediately only when a payment is due:
+    // priced non-trial plan and not currently paid up (matches server logic)
+    const u = window._accountUser || {};
+    const plan = u.accountControls;
+    const priced = !!(plan && !plan.trialDays && plan.monthlyPriceCents > 0);
+    const unpaid = !u.paidToDate || new Date(u.paidToDate) <= new Date();
+    const willPay = slot === 'PRIMARY' && priced && unpaid;
+    mountCardForm(area, slot, () => { area.style.display = 'none'; area.innerHTML = ''; renderCards(); refreshTrialBanner(); }, willPay);
 }
 
 // Mounts a card-entry form into `container`. Stripe mode: a Stripe Element
 // (digits + CVV go browser → Stripe, never to our server). Mock mode: plain
 // inputs accepted by the built-in fake gateway.
-async function mountCardForm(container, slot, onSaved) {
+// willPay: true when saving this card triggers an immediate charge (onboarding,
+// upgrades, unpaid accounts) — the button then reads "Save card and Pay".
+async function mountCardForm(container, slot, onSaved, willPay) {
     const cfg = await getBillingConfig();
     const title = slot === 'BACKUP' ? 'Backup card' : 'Primary card';
+    const saveLabel = willPay ? 'Save card and Pay' : 'Save card';
 
     if (cfg.mode === 'mock') {
         container.innerHTML = `
@@ -1388,7 +1399,7 @@ async function mountCardForm(container, slot, onSaved) {
                 </div>
                 <div class="field-error mb-2" id="mock-cc-err"></div>
                 <div class="d-flex gap-2">
-                    <button class="btn btn-primary btn-sm" onclick="saveMockCard('${slot}')">Save card and Pay</button>
+                    <button class="btn btn-primary btn-sm" onclick="saveMockCard('${slot}')">${saveLabel}</button>
                     <button class="btn btn-outline-secondary btn-sm" onclick="this.closest('div.border').parentElement.style.display='none'">Cancel</button>
                 </div>
             </div>`;
@@ -1411,7 +1422,7 @@ async function mountCardForm(container, slot, onSaved) {
                 <div id="stripe-card-el" class="form-control form-control-sm mb-2" style="padding:10px"></div>
                 <div class="field-error mb-2" id="stripe-cc-err"></div>
                 <div class="d-flex gap-2">
-                    <button class="btn btn-primary btn-sm" id="stripe-save-btn">Save card</button>
+                    <button class="btn btn-primary btn-sm" id="stripe-save-btn">${saveLabel}</button>
                     <button class="btn btn-outline-secondary btn-sm" onclick="this.closest('div.border').parentElement.style.display='none'">Cancel</button>
                 </div>
             </div>`;
@@ -1424,7 +1435,7 @@ async function mountCardForm(container, slot, onSaved) {
             const result = await stripe.confirmCardSetup(si.clientSecret, { payment_method: { card } });
             if (result.error) {
                 document.getElementById('stripe-cc-err').textContent = result.error.message;
-                btn.disabled = false; btn.textContent = 'Save card';
+                btn.disabled = false; btn.textContent = saveLabel;
                 return;
             }
             const attach = await fetch('/portal/api/billing/attach', {
@@ -1439,7 +1450,7 @@ async function mountCardForm(container, slot, onSaved) {
             else {
                 const e = await attach.json().catch(() => ({}));
                 document.getElementById('stripe-cc-err').textContent = e.error || 'Could not save card';
-                btn.disabled = false; btn.textContent = 'Save card';
+                btn.disabled = false; btn.textContent = saveLabel;
             }
         };
     } catch (e) {
@@ -1557,7 +1568,8 @@ function updateObStep(step) {
     document.getElementById('ob-next-btn').textContent = step === 4 ? 'Accept & Continue' : 'Next ›';
 
     if (step === 2 && !obData.cardSaved) {
-        mountCardForm(document.getElementById('ob-card-form'), 'PRIMARY', onObCardSaved);
+        // Step 2 only shows for paid plans (trials skip it), so saving = paying
+        mountCardForm(document.getElementById('ob-card-form'), 'PRIMARY', onObCardSaved, true);
     }
 }
 
