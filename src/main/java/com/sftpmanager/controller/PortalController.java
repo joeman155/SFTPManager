@@ -189,7 +189,8 @@ public class PortalController {
             "picture",             picture != null ? picture : "",
             "userId",              user.getId(),
             "emailVerified",       emailVerified,
-            "servicesDeactivated", deactivated
+            "servicesDeactivated", deactivated,
+            "trialExpires",        user.getTrialExpires() != null ? user.getTrialExpires().toString() : ""
         ));
     }
 
@@ -593,6 +594,58 @@ public class PortalController {
         return ResponseEntity.ok(paymentWarning != null
             ? Map.of("success", true, "paymentWarning", paymentWarning)
             : Map.of("success", true));
+    }
+
+    // ── Plans (upgrades / plan changes) ──
+
+    /** Paid plans the user can switch to (trial plans excluded). */
+    @GetMapping("/plans")
+    public ResponseEntity<?> listPlans(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
+        return currentUser(principal, session).<ResponseEntity<?>>map(user -> {
+            List<AccountControls> plans = accountControlsRepository.findAll().stream()
+                .filter(p -> p.getTrialDays() == null || p.getTrialDays() <= 0)
+                .toList();
+            java.util.Map<String, Object> out = new java.util.HashMap<>();
+            out.put("plans", plans);
+            out.put("currentPlanId", user.getAccountControls() != null ? user.getAccountControls().getId() : null);
+            return ResponseEntity.ok(out);
+        }).orElse(ResponseEntity.status(401).build());
+    }
+
+    /**
+     * Switch to a paid plan. If the user isn't currently paid up, the first
+     * month is charged immediately (same rule as onboarding); if they're
+     * mid-cycle, the new price applies from the next renewal.
+     */
+    @PostMapping("/account/plan")
+    public ResponseEntity<?> changePlan(@AuthenticationPrincipal OAuth2User principal,
+                                        @RequestBody Map<String, Object> body,
+                                        HttpSession session) {
+        return currentUser(principal, session).<ResponseEntity<?>>map(user -> {
+            Long planId = body.get("planId") != null ? Long.valueOf(body.get("planId").toString()) : null;
+            if (planId == null) return ResponseEntity.badRequest().body(Map.of("error", "planId required"));
+            AccountControls plan = accountControlsRepository.findById(planId).orElse(null);
+            if (plan == null || (plan.getTrialDays() != null && plan.getTrialDays() > 0)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid plan"));
+            }
+            user.setAccountControls(plan);
+            user.setLastUpdatedBy(user.getEmail());
+            userRepository.save(user);
+
+            var outcome = billingService.chargeFirstMonthIfDue(user);
+            java.util.Map<String, Object> out = new java.util.HashMap<>();
+            out.put("success", true);
+            out.put("plan", plan.getPlan());
+            if (outcome != null) {
+                out.put("charged", outcome.succeeded());
+                if (!outcome.succeeded()) {
+                    out.put("paymentWarning", "Your card could not be charged (" + outcome.message()
+                        + "). Please update your payment details to keep your services running.");
+                }
+            }
+            if (user.getPaidToDate() != null) out.put("paidToDate", user.getPaidToDate().toString());
+            return ResponseEntity.ok(out);
+        }).orElse(ResponseEntity.status(401).build());
     }
 
     // ── Account ──

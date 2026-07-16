@@ -124,6 +124,14 @@
     </div>
 </div>
 
+<!-- Trial reminder banner -->
+<div id="trial-banner-top" style="display:none;background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e;padding:10px 28px;font-size:.9rem">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="bi bi-clock me-2"></i>You're on a free trial — it expires on <strong id="trial-banner-date"></strong>.</span>
+        <button class="btn btn-sm btn-primary" onclick="openChangePlan()"><i class="bi bi-arrow-up-circle me-1"></i>Upgrade now</button>
+    </div>
+</div>
+
 <div class="main">
 
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -1056,6 +1064,58 @@ async function resendCode(e) {
     document.getElementById('verify-err').textContent = '';
 }
 
+// ── Change Plan ──
+async function openChangePlan() {
+    closeAccount(); // the account overlay sits above the plan modal — close it first
+    const [plansRes, cards] = await Promise.all([
+        fetch('/portal/api/plans').then(r => r.json()),
+        fetch('/portal/api/billing/cards').then(r => r.json()).catch(() => null)
+    ]);
+    window._upgradeHasCard = !!(cards && cards.primary);
+    const list = (plansRes.plans || []).map(p => `
+        <div class="plan-card" onclick="chooseUpgradePlan(${p.id}, '${p.plan}', ${p.monthlyPriceCents||0})">
+            <h6>${p.plan}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}
+                ${plansRes.currentPlanId === p.id ? '<span class="badge bg-primary-subtle text-primary ms-2">Current plan</span>' : ''}</h6>
+            <p class="text-muted small mb-0">${p.description||''}</p>
+        </div>`).join('');
+    openModal('Change Plan', `
+        <p class="text-muted small">Choose the plan you want. If a payment is due, your saved card is charged
+        for the first month immediately${window._upgradeHasCard ? '' : ' — you will be asked to add a card first'}.</p>
+        <div id="upgrade-plan-list">${list}</div>
+        <div id="upgrade-card-area" class="mt-2" style="display:none"></div>
+    `);
+}
+
+function chooseUpgradePlan(planId, planName, priceCents) {
+    if (window._upgradeHasCard) {
+        const price = priceCents ? ` ($${(priceCents/100).toFixed(2)}/month)` : '';
+        if (!confirm(`Switch to the ${planName} plan${price}? If a payment is due, your saved card will be charged now.`)) return;
+        submitPlanChange(planId);
+    } else {
+        // Need a card first — mount the secure card widget, then complete the switch
+        window._pendingPlanId = planId;
+        const area = document.getElementById('upgrade-card-area');
+        area.style.display = 'block';
+        mountCardForm(area, 'PRIMARY', () => submitPlanChange(window._pendingPlanId));
+    }
+}
+
+async function submitPlanChange(planId) {
+    const r = await fetch('/portal/api/account/plan', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ planId: planId })
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok) {
+        alert(data.paymentWarning
+            ? data.paymentWarning
+            : `You are now on the ${data.plan} plan` + (data.charged ? ` — first month charged, paid to ${data.paidToDate}.` : '.'));
+        window.location.reload();
+    } else {
+        alert(data.error || 'Could not change plan. Please try again.');
+    }
+}
+
 // ── Account Panel ──
 async function openAccount(e) {
     e.preventDefault();
@@ -1076,9 +1136,10 @@ async function openAccount(e) {
     }
 
     // Show plan
-    document.getElementById('account-plan').innerHTML = user.accountControls
-        ? `<span class="plan-badge"><i class="bi bi-check-circle me-1"></i>${user.accountControls.plan}${user.accountControls.monthlyPriceCents ? ` — $${(user.accountControls.monthlyPriceCents/100).toFixed(2)}/month` : ''}</span>`
-        : `<span class="text-muted small">No plan selected</span>`;
+    document.getElementById('account-plan').innerHTML = (user.accountControls
+        ? `<span class="plan-badge" style="cursor:pointer" onclick="openChangePlan()" title="Change plan"><i class="bi bi-check-circle me-1"></i>${user.accountControls.plan}${user.accountControls.monthlyPriceCents ? ` — $${(user.accountControls.monthlyPriceCents/100).toFixed(2)}/month` : ''}</span>`
+        : `<span class="text-muted small">No plan selected</span>`)
+        + ` <button class="btn btn-sm btn-outline-primary ms-2" onclick="openChangePlan()"><i class="bi bi-arrow-left-right me-1"></i>Change plan</button>`;
 
     // Populate fields
     const fields = {
@@ -1569,6 +1630,12 @@ async function init() {
     if (me.servicesDeactivated) {
         const banner = document.getElementById('deactivated-banner');
         banner.style.display = 'flex';
+    }
+
+    // Show trial reminder banner if on a trial
+    if (me.trialExpires) {
+        document.getElementById('trial-banner-date').textContent = new Date(me.trialExpires).toLocaleDateString();
+        document.getElementById('trial-banner-top').style.display = 'block';
     }
 
     if (!me.emailVerified) {
