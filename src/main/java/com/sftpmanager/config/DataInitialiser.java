@@ -54,6 +54,16 @@ public class DataInitialiser implements CommandLineRunner {
             accountControlsRepository.save(enterprise);
         }
 
+        // Seed trial-abuse cap: max accounts per signup IP that get a free trial
+        if (runtimeSettingsRepository.findByName("trialiplimit").isEmpty()) {
+            RuntimeSettings cap = new RuntimeSettings();
+            cap.setName("trialiplimit");
+            cap.setValue("5");
+            cap.setCreatedBy("system");
+            cap.setLastUpdatedBy("system");
+            runtimeSettingsRepository.save(cap);
+        }
+
         // Seed SFTP host
         if (runtimeSettingsRepository.findByName("sftphost001").isEmpty()) {
             RuntimeSettings host = new RuntimeSettings();

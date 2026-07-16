@@ -1545,7 +1545,8 @@ async function submitOnboarding() {
         // Redirect straight to creating their first SFTP service
         setTimeout(() => openCreateService(), 300);
     } else {
-        alert('Something went wrong. Please try again.');
+        const e = await res.json().catch(() => ({}));
+        alert(e.error || 'Something went wrong. Please try again.');
     }
 }
 

@@ -86,7 +86,8 @@ public class PortalAuthController {
 
     @PostMapping("/email-signin")
     public ResponseEntity<?> emailSignIn(@RequestBody Map<String, String> body,
-                                         HttpSession session) {
+                                         HttpSession session,
+                                         jakarta.servlet.http.HttpServletRequest request) {
         String email    = body.get("email");
         String password = body.get("password");
 
@@ -183,7 +184,11 @@ public class PortalAuthController {
             user.setPasswordHash(passwordEncoder.encode(password));
             user.setCreatedBy("email-signup");
             user.setLastUpdatedBy("email-signup");
+            user.setSignupIp(com.sftpmanager.util.RequestIp.of(request));
             userRepository.save(user);
+
+            emailService.sendSignupNotification("New signup (email/password)",
+                firstName.trim() + " " + surname.trim(), finalEmail, "Account created, verification pending");
 
             session.setAttribute("EMAIL_AUTH_USER", email);
             sendCode(email);

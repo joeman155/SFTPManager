@@ -21,6 +21,9 @@ public class EmailService {
     @Value("${app.mail.from}")
     private String fromAddress;
 
+    @Value("${app.support-email:support@leederville.net}")
+    private String supportEmail;
+
     public EmailService(JavaMailSender mailSender,
                         RuntimeSettingsRepository runtimeSettingsRepository) {
         this.mailSender = mailSender;
@@ -142,6 +145,24 @@ public class EmailService {
             </div>
             """.formatted(firstName != null && !firstName.isBlank() ? firstName : "there", amountDisplay, baseUrl);
         sendHtml(toEmail, "SFTP Manager — payment failed, action needed", html);
+    }
+
+    /** Notifies the support address about signup activity (new accounts, onboarding). */
+    @Async
+    public void sendSignupNotification(String event, String name, String email, String detail) {
+        String html = """
+            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
+                <h2 style="color:#1a1f36">%s</h2>
+                <table style="border-collapse:collapse;font-size:.95rem">
+                    <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Name</td><td style="padding:4px 0"><strong>%s</strong></td></tr>
+                    <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Email</td><td style="padding:4px 0">%s</td></tr>
+                    <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Detail</td><td style="padding:4px 0">%s</td></tr>
+                </table>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager · automated signup monitor</p>
+            </div>
+            """.formatted(event, name, email, detail);
+        sendHtml(supportEmail, "SFTP Manager — " + event + ": " + email, html);
     }
 
     private void sendHtml(String to, String subject, String html) {

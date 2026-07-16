@@ -106,6 +106,10 @@ public class User {
     @Column(name = "account_closed", nullable = false)
     private Boolean accountClosed = false;
 
+    // Client IP captured at signup (trial-abuse detection)
+    @Column(name = "signup_ip")
+    private String signupIp;
+
     @Column(name = "failed_login_attempts")
     private Integer failedLoginAttempts = 0;
 
@@ -199,6 +203,8 @@ public class User {
     public void setLocked(Boolean v) { this.locked = v; }
     public Boolean getAccountClosed() { return accountClosed; }
     public void setAccountClosed(Boolean v) { this.accountClosed = v; }
+    public String getSignupIp() { return signupIp; }
+    public void setSignupIp(String v) { this.signupIp = v; }
     public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
     public void setFailedLoginAttempts(Integer v) { this.failedLoginAttempts = v; }
     public LocalDate getTrialExpires() { return trialExpires; }

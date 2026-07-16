@@ -55,6 +55,34 @@ public class PortalController {
         this.billingService = billingService;
     }
 
+    @org.springframework.beans.factory.annotation.Value("${signup.trial-ip-limit:5}")
+    private long trialIpLimitDefault;
+
+    /**
+     * The cap lives in runtime_settings ("trialiplimit") so admins can change
+     * it from the Runtime Settings page without a restart; the
+     * signup.trial-ip-limit property is only the fallback default.
+     */
+    private long trialIpLimit() {
+        return runtimeSettingsRepository.findByName("trialiplimit")
+            .map(s -> {
+                try { return Long.parseLong(s.getValue().trim()); }
+                catch (NumberFormatException e) { return trialIpLimitDefault; }
+            })
+            .orElse(trialIpLimitDefault);
+    }
+
+    /**
+     * Trial-farming guard: once more than trialIpLimit() accounts exist from
+     * the same signup IP, further accounts from that IP get no free trial and
+     * no grace period — they can still sign up and pay.
+     */
+    private boolean isTrialBlocked(User user, jakarta.servlet.http.HttpServletRequest request) {
+        String ip = user.getSignupIp() != null ? user.getSignupIp() : com.sftpmanager.util.RequestIp.of(request);
+        if (ip == null || ip.isBlank()) return false;
+        return userRepository.countBySignupIp(ip) > trialIpLimit();
+    }
+
     // ── Helper: resolve email from OAuth2 or email session ──
     private String resolveEmail(OAuth2User principal, HttpSession session) {
         if (principal != null) {
@@ -82,7 +110,8 @@ public class PortalController {
 
     // ── Me ──
     @GetMapping("/me")
-    public ResponseEntity<?> getMe(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
+    public ResponseEntity<?> getMe(@AuthenticationPrincipal OAuth2User principal, HttpSession session,
+                                   jakarta.servlet.http.HttpServletRequest request) {
         // Support both Google OAuth and email/password auth
         String email, name, picture;
 
@@ -102,7 +131,11 @@ public class PortalController {
                 u.setAuthType("GOOGLE");
                 u.setCreatedBy("google-oauth");
                 u.setLastUpdatedBy("google-oauth");
-                return userRepository.save(u);
+                u.setSignupIp(com.sftpmanager.util.RequestIp.of(request));
+                User saved = userRepository.save(u);
+                emailService.sendSignupNotification("New signup (Google)",
+                    (saved.getFirstName() + " " + saved.getSurname()).trim(), fe, "Account created via Google sign-in");
+                return saved;
             });
         } else {
             // Email/password user — check session
@@ -436,7 +469,8 @@ public class PortalController {
     // ── Onboarding ──
 
     @GetMapping("/onboarding")
-    public ResponseEntity<?> getOnboardingData(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
+    public ResponseEntity<?> getOnboardingData(@AuthenticationPrincipal OAuth2User principal, HttpSession session,
+                                               jakarta.servlet.http.HttpServletRequest request) {
         String _email = resolveEmail(principal, session);
         if (_email == null) return ResponseEntity.status(401).build();
         String email = _email;
@@ -449,8 +483,12 @@ public class PortalController {
             return ResponseEntity.ok(Map.of("onboarded", true));
         }
 
-        // Plans live in account_controls (name, description, monthly price, limits)
-        List<AccountControls> plans = accountControlsRepository.findAll();
+        // Plans live in account_controls (name, description, monthly price, limits).
+        // Trial plans are silently omitted for IPs that have farmed too many accounts.
+        boolean trialBlocked = isTrialBlocked(user, request);
+        List<AccountControls> plans = accountControlsRepository.findAll().stream()
+            .filter(p -> !trialBlocked || p.getTrialDays() == null || p.getTrialDays() <= 0)
+            .toList();
 
         // Get T&C from runtime settings
         String tc = runtimeSettingsRepository.findByName("termsandconditions")
@@ -467,7 +505,8 @@ public class PortalController {
     @PostMapping("/onboarding")
     public ResponseEntity<?> completeOnboarding(@AuthenticationPrincipal OAuth2User principal,
                                                 @RequestBody Map<String, Object> body,
-                                           HttpSession session) {
+                                           HttpSession session,
+                                           jakarta.servlet.http.HttpServletRequest request) {
         String _email = resolveEmail(principal, session);
         if (_email == null) return ResponseEntity.status(401).build();
         String email = _email;
@@ -483,9 +522,17 @@ public class PortalController {
 
         // Card saving now happens through /portal/api/billing before this call.
         // Trust the server-side state, not the request body.
+        // trialBlocked = this IP has created too many accounts: no free trial,
+        // no grace period — only a successful payment completes onboarding.
+        // The error is deliberately non-descript.
+        boolean trialBlocked = isTrialBlocked(user, request);
         String paymentWarning = null;
         AccountControls selectedPlan = user.getAccountControls();
         if (selectedPlan != null && selectedPlan.getTrialDays() != null && selectedPlan.getTrialDays() > 0) {
+            if (trialBlocked) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Unable to complete signup. Please contact support."));
+            }
             // Trial plan — time-limited, free, never billed
             user.setTrialExpires(java.time.LocalDate.now().plusDays(selectedPlan.getTrialDays()));
             user.setPaidToDate(null);
@@ -495,6 +542,10 @@ public class PortalController {
             // Activation/paidToDate is set inside chargeFirstMonthIfDue on success.
             var outcome = billingService.chargeFirstMonthIfDue(user);
             if (outcome != null && !outcome.succeeded()) {
+                if (trialBlocked) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                        "error", "Unable to complete signup. Please contact support."));
+                }
                 // Payment failed — fall back to a 7 day grace period so the
                 // user can fix their card before services are cut off.
                 user.setTrialExpires(java.time.LocalDate.now().plusDays(7));
@@ -502,6 +553,10 @@ public class PortalController {
                     + "). You have 7 days to update your payment details.";
             }
         } else {
+            if (trialBlocked) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Unable to complete signup. Please contact support."));
+            }
             // Paid plan, no card yet — 7 day grace trial
             user.setTrialExpires(java.time.LocalDate.now().plusDays(7));
         }
@@ -518,6 +573,22 @@ public class PortalController {
 
         // Send welcome email
         emailService.sendWelcomeEmail(email, user.getFirstName());
+
+        // Notify support of the completed signup
+        String planName = selectedPlan != null ? selectedPlan.getPlan() : "no plan";
+        String outcome;
+        if (selectedPlan != null && selectedPlan.getTrialDays() != null && selectedPlan.getTrialDays() > 0) {
+            outcome = "free trial, expires " + user.getTrialExpires();
+        } else if (paymentWarning != null) {
+            outcome = "FIRST PAYMENT FAILED — 7 day grace";
+        } else if (user.getPaidToDate() != null) {
+            outcome = "first month paid, paid to " + user.getPaidToDate();
+        } else {
+            outcome = "no card — grace trial expires " + user.getTrialExpires();
+        }
+        emailService.sendSignupNotification("Onboarding completed",
+            (user.getFirstName() + " " + user.getSurname()).trim(), email,
+            "Plan: " + planName + " — " + outcome);
 
         return ResponseEntity.ok(paymentWarning != null
             ? Map.of("success", true, "paymentWarning", paymentWarning)
