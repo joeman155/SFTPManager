@@ -514,7 +514,7 @@ async function loadUsers() {
     if (!users.length) { empty('users-tbody', 10); return; }
     tbody.innerHTML = users.map(u => `<tr>
         <td>${u.firstName||''} ${u.surname||''}</td>
-        <td>${u.email||''}</td>
+        <td>${u.email||''}${u.signupIp ? `<div class="text-muted" style="font-size:.72rem" title="IP address captured at signup"><i class="bi bi-geo-alt me-1"></i>${u.signupIp}</div>` : ''}</td>
         <td>${u.company||''}</td>
         <td>${u.accountControls ? `<span class="badge bg-primary-subtle text-primary">${u.accountControls.plan}</span>` : '<span class="text-muted">—</span>'}</td>
         <td>${u.country||'—'}</td>
@@ -786,6 +786,7 @@ function openUserForm(data={}) {
             ${fld('Surname','surname','text','Smith',true)}
             ${fld('Email','email','email','jane@company.com',true)}
             ${fld('Phone','phone','tel','+61 400 000 000')}
+            ${editingId ? `<div class="col-12 mb-3 small text-muted">Signup IP: <code>${data.signupIp||'not recorded'}</code></div>` : ''}
         </div>
         <div class="section-header mb-3 mt-1">Company</div>
         <div class="row">
