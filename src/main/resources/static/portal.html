@@ -403,7 +403,7 @@
             <div class="tc-box" id="tc-content"></div>
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="ob-tc-accept">
-                <label class="form-check-label small">I have read and agree to the Terms and Conditions</label>
+                <label class="form-check-label small" for="ob-tc-accept" style="cursor:pointer">I have read and agree to the Terms and Conditions</label>
             </div>
             <div class="field-error" id="ob-tc-err"></div>
         </div>
@@ -1064,6 +1064,22 @@ async function resendCode(e) {
     document.getElementById('verify-err').textContent = '';
 }
 
+// ── Trial banner ──
+function updateTrialBanner(trialExpires) {
+    const banner = document.getElementById('trial-banner-top');
+    if (!trialExpires) { banner.style.display = 'none'; return; }
+    const days = Math.max(0, Math.ceil((new Date(trialExpires) - new Date()) / 86400000));
+    const daysLabel = days === 0 ? 'today' : 'in ' + days + ' day' + (days === 1 ? '' : 's');
+    document.getElementById('trial-banner-date').textContent =
+        new Date(trialExpires).toLocaleDateString() + ' (' + daysLabel + ')';
+    banner.style.display = 'block';
+}
+
+async function refreshTrialBanner() {
+    const me = await fetch('/portal/api/me').then(r => r.json()).catch(() => null);
+    if (me) updateTrialBanner(me.trialExpires);
+}
+
 // ── Change Plan ──
 async function openChangePlan() {
     closeAccount(); // the account overlay sits above the plan modal — close it first
@@ -1072,8 +1088,9 @@ async function openChangePlan() {
         fetch('/portal/api/billing/cards').then(r => r.json()).catch(() => null)
     ]);
     window._upgradeHasCard = !!(cards && cards.primary);
+    window._pendingUpgrade = null;
     const list = (plansRes.plans || []).map(p => `
-        <div class="plan-card" onclick="chooseUpgradePlan(${p.id}, '${p.plan}', ${p.monthlyPriceCents||0})">
+        <div class="plan-card" id="up-plan-${p.id}" onclick="selectUpgradePlan(${p.id}, '${p.plan}', ${p.monthlyPriceCents||0})">
             <h6>${p.plan}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}
                 ${plansRes.currentPlanId === p.id ? '<span class="badge bg-primary-subtle text-primary ms-2">Current plan</span>' : ''}</h6>
             <p class="text-muted small mb-0">${p.description||''}</p>
@@ -1083,20 +1100,34 @@ async function openChangePlan() {
         for the first month immediately${window._upgradeHasCard ? '' : ' — you will be asked to add a card first'}.</p>
         <div id="upgrade-plan-list">${list}</div>
         <div id="upgrade-card-area" class="mt-2" style="display:none"></div>
+        <div class="d-flex justify-content-end gap-2 mt-3">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="upgrade-go-btn" disabled onclick="confirmUpgrade()">Choose a plan above</button>
+        </div>
     `);
 }
 
-function chooseUpgradePlan(planId, planName, priceCents) {
+function selectUpgradePlan(planId, planName, priceCents) {
+    window._pendingUpgrade = { id: planId, name: planName, price: priceCents };
+    document.querySelectorAll('#upgrade-plan-list .plan-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('up-plan-' + planId).classList.add('selected');
+    const btn = document.getElementById('upgrade-go-btn');
+    btn.disabled = false;
+    btn.textContent = `Upgrade to ${planName}` + (priceCents ? ` — $${(priceCents/100).toFixed(2)}/month` : '');
+}
+
+function confirmUpgrade() {
+    const sel = window._pendingUpgrade;
+    if (!sel) return;
     if (window._upgradeHasCard) {
-        const price = priceCents ? ` ($${(priceCents/100).toFixed(2)}/month)` : '';
-        if (!confirm(`Switch to the ${planName} plan${price}? If a payment is due, your saved card will be charged now.`)) return;
-        submitPlanChange(planId);
+        const price = sel.price ? ` ($${(sel.price/100).toFixed(2)}/month)` : '';
+        if (!confirm(`Switch to the ${sel.name} plan${price}? If a payment is due, your saved card will be charged now.`)) return;
+        submitPlanChange(sel.id);
     } else {
         // Need a card first — mount the secure card widget, then complete the switch
-        window._pendingPlanId = planId;
         const area = document.getElementById('upgrade-card-area');
         area.style.display = 'block';
-        mountCardForm(area, 'PRIMARY', () => submitPlanChange(window._pendingPlanId));
+        mountCardForm(area, 'PRIMARY', () => submitPlanChange(window._pendingUpgrade.id));
     }
 }
 
@@ -1357,7 +1388,7 @@ async function mountCardForm(container, slot, onSaved) {
                 </div>
                 <div class="field-error mb-2" id="mock-cc-err"></div>
                 <div class="d-flex gap-2">
-                    <button class="btn btn-primary btn-sm" onclick="saveMockCard('${slot}')">Save card</button>
+                    <button class="btn btn-primary btn-sm" onclick="saveMockCard('${slot}')">Save card and Pay</button>
                     <button class="btn btn-outline-secondary btn-sm" onclick="this.closest('div.border').parentElement.style.display='none'">Cancel</button>
                 </div>
             </div>`;
@@ -1602,6 +1633,7 @@ async function submitOnboarding() {
         const data = await res.json().catch(() => ({}));
         if (data.paymentWarning) alert(data.paymentWarning);
         document.getElementById('onboarding-overlay').style.display = 'none';
+        refreshTrialBanner(); // show the trial banner immediately, no page refresh needed
         await loadServices();
         // Redirect straight to creating their first SFTP service
         setTimeout(() => openCreateService(), 300);
@@ -1633,13 +1665,7 @@ async function init() {
     }
 
     // Show trial reminder banner if on a trial
-    if (me.trialExpires) {
-        const days = Math.max(0, Math.ceil((new Date(me.trialExpires) - new Date()) / 86400000));
-        const daysLabel = days === 0 ? 'today' : 'in ' + days + ' day' + (days === 1 ? '' : 's');
-        document.getElementById('trial-banner-date').textContent =
-            new Date(me.trialExpires).toLocaleDateString() + ' (' + daysLabel + ')';
-        document.getElementById('trial-banner-top').style.display = 'block';
-    }
+    updateTrialBanner(me.trialExpires);
 
     if (!me.emailVerified) {
         // Only NOW show the verify screen — we know it's needed
