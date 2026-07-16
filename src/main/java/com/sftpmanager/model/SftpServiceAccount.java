@@ -24,11 +24,18 @@ public class SftpServiceAccount {
     @Column(name = "email")
     private String email;
 
+    // Bcrypt hash — accepted on write, never returned in API responses
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     @Column(name = "password")
     private String password;
 
     @Column(name = "public_key", columnDefinition = "TEXT")
     private String publicKey;
+
+    // RFC 4716 copy of publicKey, consumed by ProFTPD mod_sftp
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "public_key_rfc4716", columnDefinition = "TEXT")
+    private String publicKeyRfc4716;
 
     @Column(name = "enabled")
     private Boolean enabled = true;
@@ -73,6 +80,8 @@ public class SftpServiceAccount {
     public void setPassword(String v) { this.password = v; }
     public String getPublicKey() { return publicKey; }
     public void setPublicKey(String v) { this.publicKey = v; }
+    public String getPublicKeyRfc4716() { return publicKeyRfc4716; }
+    public void setPublicKeyRfc4716(String v) { this.publicKeyRfc4716 = v; }
     public Boolean getEnabled() { return enabled; }
     public void setEnabled(Boolean v) { this.enabled = v; }
     public String getPermissions() { return permissions; }

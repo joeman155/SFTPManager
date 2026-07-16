@@ -42,7 +42,11 @@ public class SftpServiceAccountController {
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody SftpServiceAccount account,
                                     @RequestParam(required = false) Long sftpServiceId) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.save(account, sftpServiceId));
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED).body(service.save(account, sftpServiceId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}")
@@ -51,6 +55,8 @@ public class SftpServiceAccountController {
                                     @RequestParam(required = false) Long sftpServiceId) {
         try {
             return ResponseEntity.ok(service.update(id, account, sftpServiceId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
         }

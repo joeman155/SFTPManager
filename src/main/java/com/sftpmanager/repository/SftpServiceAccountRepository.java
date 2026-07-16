@@ -8,4 +8,6 @@ import java.util.List;
 @Repository
 public interface SftpServiceAccountRepository extends JpaRepository<SftpServiceAccount, Long> {
     List<SftpServiceAccount> findBySftpServiceId(Long sftpServiceId);
+    boolean existsByUsernameIgnoreCase(String username);
+    boolean existsByUsernameIgnoreCaseAndIdNot(String username, Long id);
 }

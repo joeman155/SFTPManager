@@ -32,6 +32,7 @@ public class PortalController {
     private final EmailService emailService;
     private final EmailVerificationRepository verificationRepository;
     private final com.sftpmanager.service.BillingService billingService;
+    private final com.sftpmanager.service.SftpCredentialService sftpCredentialService;
 
     public PortalController(PortalUserRepository portalUserRepository,
                             UserRepository userRepository,
@@ -42,7 +43,8 @@ public class PortalController {
                             RuntimeSettingsRepository runtimeSettingsRepository,
                             EmailService emailService,
                             EmailVerificationRepository verificationRepository,
-                            com.sftpmanager.service.BillingService billingService) {
+                            com.sftpmanager.service.BillingService billingService,
+                            com.sftpmanager.service.SftpCredentialService sftpCredentialService) {
         this.portalUserRepository = portalUserRepository;
         this.userRepository = userRepository;
         this.sftpServiceRepository = sftpServiceRepository;
@@ -53,6 +55,7 @@ public class PortalController {
         this.emailService = emailService;
         this.verificationRepository = verificationRepository;
         this.billingService = billingService;
+        this.sftpCredentialService = sftpCredentialService;
     }
 
     @org.springframework.beans.factory.annotation.Value("${signup.trial-ip-limit:5}")
@@ -294,13 +297,16 @@ public class PortalController {
                                            @PathVariable Long svcId,
                                            @RequestBody SftpServiceAccount account,
                                            HttpSession session) {
-        return currentUser(principal, session).map(user ->
+        return currentUser(principal, session).<ResponseEntity<?>>map(user ->
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
-                .map(s -> {
+                .<ResponseEntity<?>>map(s -> {
+                    String taken = sftpCredentialService.usernameTakenError(account.getUsername(), null);
+                    if (taken != null) return ResponseEntity.status(409).body(Map.of("error", taken));
                     account.setSftpService(s);
                     account.setCreatedBy(user.getEmail());
                     account.setLastUpdatedBy(user.getEmail());
+                    sftpCredentialService.applyCredentials(account, account.getPassword(), account.getPublicKey());
                     return ResponseEntity.status(HttpStatus.CREATED).body(accountRepository.save(account));
                 })
                 .orElse(ResponseEntity.status(403).build())
@@ -313,15 +319,16 @@ public class PortalController {
                                            @PathVariable Long id,
                                            @RequestBody SftpServiceAccount updated,
                                            HttpSession session) {
-        return currentUser(principal, session).map(user ->
+        return currentUser(principal, session).<ResponseEntity<?>>map(user ->
             accountRepository.findById(id)
                 .filter(a -> a.getSftpService() != null && a.getSftpService().getId().equals(svcId))
-                .map(a -> {
+                .<ResponseEntity<?>>map(a -> {
+                    String taken = sftpCredentialService.usernameTakenError(updated.getUsername(), id);
+                    if (taken != null) return ResponseEntity.status(409).body(Map.of("error", taken));
                     a.setUsername(updated.getUsername());
                     a.setEmail(updated.getEmail());
                     a.setAuthenticationType(updated.getAuthenticationType());
-                    a.setPassword(updated.getPassword());
-                    a.setPublicKey(updated.getPublicKey());
+                    sftpCredentialService.applyCredentials(a, updated.getPassword(), updated.getPublicKey());
                     a.setEnabled(updated.getEnabled());
                     a.setPermissions(updated.getPermissions());
                     a.setLastUpdatedBy(user.getEmail());

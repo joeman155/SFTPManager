@@ -5,6 +5,7 @@ import com.sftpmanager.model.RuntimeSettings;
 import com.sftpmanager.repository.AccountControlsRepository;
 import com.sftpmanager.repository.RuntimeSettingsRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -12,15 +13,20 @@ public class DataInitialiser implements CommandLineRunner {
 
     private final AccountControlsRepository accountControlsRepository;
     private final RuntimeSettingsRepository runtimeSettingsRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     public DataInitialiser(AccountControlsRepository accountControlsRepository,
-                           RuntimeSettingsRepository runtimeSettingsRepository) {
+                           RuntimeSettingsRepository runtimeSettingsRepository,
+                           JdbcTemplate jdbcTemplate) {
         this.accountControlsRepository = accountControlsRepository;
         this.runtimeSettingsRepository = runtimeSettingsRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
     public void run(String... args) {
+
+        createProftpdViews();
 
         // Seed plans (account controls) if empty
         if (accountControlsRepository.count() == 0) {
@@ -126,5 +132,42 @@ public class DataInitialiser implements CommandLineRunner {
             tc.setLastUpdatedBy("system");
             runtimeSettingsRepository.save(tc);
         }
+    }
+
+    /**
+     * Views consumed by ProFTPD (mod_sql_postgres) on the SFTP hosts —
+     * see PROFTPD-SETUP.md. Recreated on every start since ddl-auto=create
+     * rebuilds the schema. Only ENABLED accounts of users in good standing
+     * (not deactivated / locked / closed) are visible to the SFTP server,
+     * so every kill-switch in the app instantly applies to SFTP logins.
+     */
+    private void createProftpdViews() {
+        jdbcTemplate.execute("""
+            CREATE OR REPLACE VIEW proftpd_users AS
+            SELECT a.username                                            AS userid,
+                   a.password                                            AS passwd,
+                   2001                                                  AS uid,
+                   2001                                                  AS gid,
+                   '/srv/sftp/svc' || s.id || '/' || a.username          AS homedir,
+                   '/usr/sbin/nologin'                                   AS shell,
+                   a.public_key_rfc4716                                  AS ssh_key,
+                   a.permissions                                         AS permissions
+            FROM sftp_service_account a
+            JOIN sftp_service s ON s.id = a.sftp_service_id
+            JOIN users u        ON u.id = s.user_id
+            WHERE COALESCE(a.enabled, false) = true
+              AND COALESCE(u.services_deactivated, false) = false
+              AND COALESCE(u.locked, false) = false
+              AND COALESCE(u.account_closed, false) = false
+            """);
+
+        jdbcTemplate.execute("""
+            CREATE OR REPLACE VIEW proftpd_allowed_ips AS
+            SELECT a.username    AS name,
+                   w.ip_address  AS allowed
+            FROM sftp_service_account a
+            JOIN sftp_service_ipwhitelist w ON w.sftp_service_id = a.sftp_service_id
+            WHERE COALESCE(w.enabled, false) = true
+            """);
     }
 }

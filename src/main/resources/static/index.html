@@ -947,8 +947,9 @@ function openAccountForm(data={}) {
             <div class="section-header mb-3">Password</div>
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label class="form-label small fw-semibold">Password <span class="text-danger">*</span></label>
-                    <input class="form-control form-control-sm" type="password" id="acctPassword" oninput="updatePwStrength(this.value)">
+                    <label class="form-label small fw-semibold">Password ${editingId?'':'<span class="text-danger">*</span>'}</label>
+                    <input class="form-control form-control-sm" type="password" id="acctPassword" oninput="updatePwStrength(this.value)"
+                        placeholder="${editingId?'Leave blank to keep current password':''}">
                     <div class="strength-bar mt-1" id="strength-bar" style="background:#e5e7eb;width:0%"></div>
                     <div class="pw-hint" id="strength-label"></div>
                     <div class="field-error" id="acctPassword-err"></div>
@@ -984,7 +985,7 @@ function openAccountForm(data={}) {
         setVal('acctEnabled', data.enabled);
         if (data.sftpService) setVal('acctSftpId', data.sftpService.id);
         toggleAuthFields();
-        if (data.password) setVal('acctPassword', data.password);
+        // Password is never sent back by the API (stored as a hash) — blank means "keep current"
         if (data.publicKey) setVal('acctPublicKey', data.publicKey);
         const perms = (data.permissions || '').split(',');
         document.getElementById('adminPermRead').checked = perms.includes('READ');
@@ -1014,7 +1015,8 @@ async function saveAccount() {
         ['acctUsername', V.required, v => /^[a-zA-Z0-9]+$/.test(v) ? null : 'Username must be alphanumeric with no spaces'],
         ['acctAuthType', V.required],
     ];
-    if (authType === 'PASSWORD') rules.push(['acctPassword', V.required, V.password]);
+    // On edit, a blank password means "keep the current one"
+    if (authType === 'PASSWORD') rules.push(editingId ? ['acctPassword', V.password] : ['acctPassword', V.required, V.password]);
     if (authType === 'PUBLIC_KEY') rules.push(['acctPublicKey', V.required, V.publicKey]);
     if (!validateForm(rules)) return;
     const sftpId = getVal('acctSftpId');
@@ -1022,7 +1024,7 @@ async function saveAccount() {
         username: getVal('acctUsername'),
         email: getVal('acctEmail') || null,
         authenticationType: authType,
-        password: authType === 'PASSWORD' ? getVal('acctPassword') : null,
+        password: authType === 'PASSWORD' ? (getVal('acctPassword') || null) : null,
         publicKey: authType === 'PUBLIC_KEY' ? getVal('acctPublicKey') : null,
         enabled: document.getElementById('acctEnabled').checked,
         permissions: ['READ','WRITE','DELETE'].filter(p => {

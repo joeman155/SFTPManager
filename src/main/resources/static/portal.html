@@ -711,8 +711,9 @@ function openAccountForm(data={}) {
         </div>
         <div id="pw-sec" style="display:none">
             <div class="mb-3">
-                <label class="form-label small fw-semibold">Password <span class="text-danger">*</span></label>
-                <input class="form-control form-control-sm" type="password" id="acctPw" oninput="updateStrength(this.value)">
+                <label class="form-label small fw-semibold">Password ${editingAcctId?'':'<span class="text-danger">*</span>'}</label>
+                <input class="form-control form-control-sm" type="password" id="acctPw" oninput="updateStrength(this.value)"
+                    placeholder="${editingAcctId?'Leave blank to keep current password':''}">
                 <div class="strength-bar" id="str-bar" style="background:#e5e7eb;width:0%"></div>
                 <div class="pw-hint" id="str-label"></div>
                 <div class="field-error" id="acctPw-err"></div>
@@ -740,7 +741,7 @@ function openAccountForm(data={}) {
         setVal('acctAuth', data.authenticationType);
         setVal('acctEnabled', data.enabled);
         toggleAuth();
-        if (data.password) setVal('acctPw', data.password);
+        // Password is never sent back by the API (stored as a hash) — blank means "keep current"
         if (data.publicKey) setVal('acctPk', data.publicKey);
     }
 }
@@ -764,14 +765,15 @@ function updateStrength(pw) {
 async function saveSvcAccount() {
     const authType = getVal('acctAuth');
     const rules = [['acctUser',V.required],['acctAuth',V.required]];
-    if (authType==='PASSWORD') rules.push(['acctPw',V.required,V.password]);
+    // On edit, a blank password means "keep the current one"
+    if (authType==='PASSWORD') rules.push(editingAcctId ? ['acctPw',V.password] : ['acctPw',V.required,V.password]);
     if (authType==='PUBLIC_KEY') rules.push(['acctPk',V.required,V.publicKey]);
     if (!validate(rules)) return;
     const body = {
         username: getVal('acctUser'),
         email: getVal('acctEmail') || null,
         authenticationType: authType,
-        password: authType==='PASSWORD' ? getVal('acctPw') : null,
+        password: authType==='PASSWORD' ? (getVal('acctPw') || null) : null,
         publicKey: authType==='PUBLIC_KEY' ? getVal('acctPk') : null,
         enabled: document.getElementById('acctEnabled').checked,
         permissions: ['READ','WRITE','DELETE'].filter(p => document.getElementById('p'+p.charAt(0)+p.slice(1).toLowerCase()).checked).join(',')
@@ -781,7 +783,10 @@ async function saveSvcAccount() {
         : `/portal/api/services/${currentSvcId}/accounts`;
     const r = await fetch(url, {method:editingAcctId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     if (r.ok) { backToAccounts(); }
-    else alert('Save failed');
+    else {
+        const e = await r.json().catch(()=>({}));
+        alert(e.error || 'Save failed');
+    }
 }
 
 async function editAccount(id) {
