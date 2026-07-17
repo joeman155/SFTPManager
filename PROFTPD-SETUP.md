@@ -20,7 +20,9 @@ lookups.
   owning customer is not deactivated / locked / closed. Every kill-switch in
   the admin screen applies to SFTP logins on the next connection.
   Columns: `userid, passwd, uid, gid, homedir, shell, ssh_key, permissions`.
-  Home dirs are `/srv/sftp/svc<serviceId>/<username>`; uid/gid fixed at 2001.
+  Home dirs are `/srv/sftp/svc<serviceId>` — **shared per service**, so every
+  account under the same SFTP Service sees the same files (they all run as
+  uid/gid 2001, so there are no ownership conflicts between them).
 - **`proftpd_allowed_ips` view** — `(name, allowed)` pairs from the IP
   whitelist, per username.
 
@@ -36,6 +38,25 @@ wiping data on restart this is moot in dev.
 sudo apt-get install proftpd-core proftpd-mod-pgsql proftpd-mod-crypto
 # (proftpd-mod-crypto provides mod_sftp on Debian/Ubuntu)
 ```
+
+### 1b. Enable the required modules — IMPORTANT
+
+Installing the packages is not enough: the modules must be loaded in
+`/etc/proftpd/modules.conf`. Make sure these four lines exist and are
+**uncommented**:
+
+```apacheconf
+LoadModule mod_sql.c
+LoadModule mod_sql_postgres.c
+LoadModule mod_sftp.c
+LoadModule mod_sftp_sql.c
+```
+
+(`mod_sftp_sql` is what makes `SFTPAuthorizedUserKeys sql:/...` work.)
+
+This step matters because the whole vhost below is wrapped in
+`<IfModule mod_sftp.c>` — if the module isn't loaded, ProFTPD starts fine
+but **silently ignores the entire block**, and nothing listens on 2222.
 
 ### 2. Create the shared system user and directory root
 
@@ -61,7 +82,7 @@ On the Postgres server (least privilege — ProFTPD only ever reads):
 ```sql
 CREATE ROLE proftpd LOGIN PASSWORD 'choose-a-strong-password';
 GRANT CONNECT ON DATABASE sftpmanager TO proftpd;
-GRANT SELECT ON proftpd_users, proftpd_allowed_ips TO proftpd;
+GRANT SELECT ON proftpd_users, proftpd_allowed_ips, proftpd_groups TO proftpd;
 ```
 
 Allow the SFTP host's IP in `pg_hba.conf` if it's a separate machine.
@@ -98,27 +119,76 @@ Allow the SFTP host's IP in `pg_hba.conf` if it's a separate machine.
     SFTPAuthMethods      publickey password
 
     # ── Virtual users: no real shell accounts needed ────────────────
+    # NOTE: ProFTPD does NOT allow comments on the same line as a directive
     AuthOrder            mod_sql.c
     RequireValidShell    off
     CreateHome           on 700 dirmode 711
-    DefaultRoot          ~                      # chroot each user to their homedir
+    # Chroot each user into their own home directory:
+    DefaultRoot          ~
 
-    # ── Map app permissions (READ / WRITE / DELETE) ──────────────────
-    # Simplest robust mapping: read-only unless WRITE is granted.
-    # %{env:...} tricks are fragile in mod_sql — do it with a second query
-    # + mod_ifsession, or start permissive and tighten later:
-    <Limit WRITE>
+    # ── Enforce app permissions (READ / WRITE / DELETE) ─────────────
+    # The app publishes three synthetic groups in the proftpd_groups view:
+    #   sftpread   = accounts with READ    (download + list files)
+    #   sftpwrite  = accounts with WRITE   (upload, mkdir, rename)
+    #   sftpdelete = accounts with DELETE  (delete files, remove dirs)
+    # These are SQL-only groups — nothing is added to /etc/group, and every
+    # session still runs as uid/gid 2001 on the filesystem.
+    SQLAuthenticate      users groups
+    SQLGroupInfo         proftpd_groups groupname gid members
+
+    # Downloads and directory listings need READ
+    <Limit RETR LIST NLST MLSD MLST STAT>
+        AllowGroup sftpread
+        DenyAll
+    </Limit>
+    # Uploads, new folders and renames need WRITE
+    <Limit STOR STOU APPE MKD XMKD RNFR RNTO>
+        AllowGroup sftpwrite
+        DenyAll
+    </Limit>
+    # Deleting files / removing folders needs DELETE
+    <Limit DELE RMD XRMD>
+        AllowGroup sftpdelete
+        DenyAll
+    </Limit>
+    # Navigation is always allowed (entering folders, printing the path)
+    <Limit CWD XCWD CDUP PWD XPWD>
         AllowAll
     </Limit>
 </VirtualHost>
 </IfModule>
 ```
 
-Remove/disable the default FTP vhost in `/etc/proftpd/proftpd.conf`
-(`ServerType standalone`, comment out `Port 21` usage) if you only want SFTP.
+### 5b. Turn off plain FTP (port 21)
+
+Out of the box, ProFTPD also runs an ordinary **unencrypted FTP server on
+port 21** — that's its default personality, defined in the main config file.
+You almost certainly don't want that; only the SFTP vhost on port 2222 from
+the config above should be listening.
+
+To disable it:
+
+1. Open the main config: `sudo nano /etc/proftpd/proftpd.conf`
+2. Find the line that says:
+   ```
+   Port    21
+   ```
+3. Change it to:
+   ```
+   Port    0
+   ```
+   `Port 0` is ProFTPD's official way of saying "don't listen at all" for the
+   default server. The SFTP `<VirtualHost>` you created is unaffected — it
+   declares its own `Port 2222`.
+4. Leave `ServerType standalone` **as it is** — that line just means ProFTPD
+   runs as a normal background daemon, and it must stay.
+
+Then restart and verify only 2222 is listening:
 
 ```bash
 sudo systemctl restart proftpd
+sudo ss -tlnp | grep proftpd
+# expect ONE line, showing :2222 — if you also see :21, step 3 didn't take
 ```
 
 ### 6. Optional: enforce the IP whitelist (mod_wrap2_sql)
@@ -161,8 +231,19 @@ reconnect → login refused, because the view no longer returns the row.
 
 ## Troubleshooting
 
+Always start with these two commands — they distinguish "ProFTPD didn't
+start" from "started but skipped the vhost":
+
+```bash
+sudo systemctl status proftpd     # running at all?
+sudo proftpd -t                   # parse the config; prints the exact bad line
+sudo ss -tlnp | grep proftpd      # what's actually listening
+```
+
 | Symptom | Likely cause |
 |---|---|
+| Nothing on 2222, proftpd NOT running | Config parse error — run `sudo proftpd -t`. Common: an inline `# comment` after a directive (not allowed — comments must be on their own line) |
+| Nothing on 2222, proftpd IS running (maybe on 21) | `mod_sftp` not loaded, so the `<IfModule mod_sftp.c>` block was silently skipped — see step 1b. Also check `/etc/proftpd/proftpd.conf` still has its `Include /etc/proftpd/conf.d/` line |
 | Password always rejected | Old plaintext row (re-save the password in the app), or distro without bcrypt in crypt(3) — check `SQLAuthTypes`; on old distros switch app hashing strategy |
 | Key always rejected | Key column empty (`ssh_key IS NULL`) — the app only converts keys saved after this feature; re-save the key |
 | `no such user` | Row filtered out by the view — account disabled or owner deactivated/locked/closed |
@@ -175,6 +256,8 @@ reconnect → login refused, because the view no longer returns the row.
   payments, or portal tables.
 - Port 2222 keeps ProFTPD clear of the host's own OpenSSH on 22. Firewall
   everything else.
-- The app's `permissions` column is exposed in the view but not yet enforced
-  in the sample config (see the `<Limit>` block) — tightening per-user
-  write/delete is the natural next step once basic auth works.
+- Per-account permissions are enforced by ProFTPD at the protocol level via
+  the `proftpd_groups` view and the `<Limit>` blocks — NOT by filesystem
+  uid/gid. All files stay owned by uid 2001; what varies per user is which
+  SFTP operations their session may perform. Changing an account's
+  permissions in the app takes effect on their next connection.
