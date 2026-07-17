@@ -148,7 +148,7 @@ public class DataInitialiser implements CommandLineRunner {
                    a.password                                            AS passwd,
                    2001                                                  AS uid,
                    2001                                                  AS gid,
-                   '/srv/sftp/svc' || s.id || '/' || a.username          AS homedir,
+                   '/srv/sftp/svc' || s.id                               AS homedir,
                    '/usr/sbin/nologin'                                   AS shell,
                    a.public_key_rfc4716                                  AS ssh_key,
                    a.permissions                                         AS permissions
@@ -168,6 +168,23 @@ public class DataInitialiser implements CommandLineRunner {
             FROM sftp_service_account a
             JOIN sftp_service_ipwhitelist w ON w.sftp_service_id = a.sftp_service_id
             WHERE COALESCE(w.enabled, false) = true
+            """);
+
+        // Synthetic groups mapping the app's READ/WRITE/DELETE permissions to
+        // ProFTPD <Limit AllowGroup> rules. These groups exist only in SQL —
+        // no /etc/group entries needed; filesystem ownership stays uid 2001.
+        jdbcTemplate.execute("""
+            CREATE OR REPLACE VIEW proftpd_groups AS
+            SELECT g.groupname,
+                   g.gid,
+                   COALESCE(string_agg(v.userid, ','), '') AS members
+            FROM (VALUES ('sftpread', 3001), ('sftpwrite', 3002), ('sftpdelete', 3003))
+                 AS g(groupname, gid)
+            LEFT JOIN proftpd_users v ON (
+                   (g.groupname = 'sftpread'   AND v.permissions LIKE '%READ%')
+                OR (g.groupname = 'sftpwrite'  AND v.permissions LIKE '%WRITE%')
+                OR (g.groupname = 'sftpdelete' AND v.permissions LIKE '%DELETE%'))
+            GROUP BY g.groupname, g.gid
             """);
     }
 }
