@@ -93,7 +93,11 @@ Allow the SFTP host's IP in `pg_hba.conf` if it's a separate machine.
 
 ```apacheconf
 <IfModule mod_sftp.c>
-<VirtualHost 0.0.0.0>
+# "0.0.0.0 ::" covers IPv4 AND IPv6 — connecting to "localhost" often uses
+# ::1, and an IPv4-only vhost would NOT handle that connection (the default
+# server would, with mod_sql's default queries → "column userid does not
+# exist" errors against the app's own users table).
+<VirtualHost 0.0.0.0 ::>
     Port                 2222
     SFTPEngine           on
     SFTPLog              /var/log/proftpd/sftp.log
@@ -103,17 +107,28 @@ Allow the SFTP host's IP in `pg_hba.conf` if it's a separate machine.
     # ── Auth from PostgreSQL ─────────────────────────────────────────
     SQLBackend           postgres
     SQLConnectInfo       sftpmanager@db-host:5432 proftpd choose-a-strong-password
-    SQLAuthenticate      users
+    # "users groups" — BOTH words matter. Without "groups", mod_sql never
+    # looks up group membership, no session gets the sftpread/sftpwrite/
+    # sftpdelete groups, and every <Limit> below denies everything.
+    # There must be exactly ONE SQLAuthenticate line in this vhost.
+    SQLAuthenticate      users groups
     # bcrypt hashes are verified via crypt(3) / libxcrypt:
     SQLAuthTypes         Crypt
-    SQLUserInfo          custom:/get-user
-    SQLNamedQuery        get-user SELECT "userid, passwd, uid, gid, homedir, shell \
-                             FROM proftpd_users WHERE userid = '%U'"
+    # TWO user queries are needed: by-name (login) AND by-uid (directory
+    # listings map file-owner uid 2001 back to a name). Without the second,
+    # mod_sql falls back to its default "FROM users" query -> fatal error
+    # and the session is dropped right after authentication.
+    #
+    # IMPORTANT: each SQLNamedQuery must be ONE single line — do NOT wrap
+    # them or use backslash continuations, or the next config line gets
+    # swallowed into the SQL and Postgres errors out.
+    SQLUserInfo          custom:/get-user/get-user-by-id
+    SQLNamedQuery        get-user SELECT "userid, passwd, uid, gid, homedir, shell FROM proftpd_users WHERE userid = '%U'"
+    SQLNamedQuery        get-user-by-id SELECT "userid, passwd, uid, gid, homedir, shell FROM proftpd_users WHERE uid = '%{0}' LIMIT 1"
 
     # Public keys (RFC 4716, from the app's converted column)
     SFTPAuthorizedUserKeys sql:/get-user-key
-    SQLNamedQuery        get-user-key SELECT "ssh_key FROM proftpd_users \
-                             WHERE userid = '%U' AND ssh_key IS NOT NULL"
+    SQLNamedQuery        get-user-key SELECT "ssh_key FROM proftpd_users WHERE userid = '%U' AND ssh_key IS NOT NULL"
 
     # Try key first, then password (both enabled)
     SFTPAuthMethods      publickey password
@@ -133,7 +148,8 @@ Allow the SFTP host's IP in `pg_hba.conf` if it's a separate machine.
     #   sftpdelete = accounts with DELETE  (delete files, remove dirs)
     # These are SQL-only groups — nothing is added to /etc/group, and every
     # session still runs as uid/gid 2001 on the filesystem.
-    SQLAuthenticate      users groups
+    # (Group lookups are enabled by the single "SQLAuthenticate users groups"
+    # line in the auth section above.)
     SQLGroupInfo         proftpd_groups groupname gid members
 
     # Downloads and directory listings need READ
@@ -244,6 +260,9 @@ sudo ss -tlnp | grep proftpd      # what's actually listening
 |---|---|
 | Nothing on 2222, proftpd NOT running | Config parse error — run `sudo proftpd -t`. Common: an inline `# comment` after a directive (not allowed — comments must be on their own line) |
 | Nothing on 2222, proftpd IS running (maybe on 21) | `mod_sftp` not loaded, so the `<IfModule mod_sftp.c>` block was silently skipped — see step 1b. Also check `/etc/proftpd/proftpd.conf` still has its `Include /etc/proftpd/conf.d/` line |
+| `column "userid" does not exist ... FROM users` at LOGIN time | The connection was handled by the DEFAULT server, not your vhost, so mod_sql used its built-in default query (table `users`). Usually an IPv4/IPv6 mismatch: the log shows `[::1]` but the vhost was `<VirtualHost 0.0.0.0>` (IPv4-only). Use `<VirtualHost 0.0.0.0 ::>` or connect via `127.0.0.1` |
+| Auth succeeds, then "Connection closed by remote host" (same `userid` error in log) | Missing by-uid user query — directory listings look users up by uid, and with only the by-name query defined mod_sql falls back to its default `FROM users` lookup. Define `SQLUserInfo custom:/get-user/get-user-by-id` with both named queries (see step 5) |
+| Login OK but EVERYTHING is "Permission denied" (`blocked by <Limit ...>`), and the SQL log has NO `sql_getgroups` lines even though `proftpd_groups` has the right members | `SQLAuthenticate` is missing the `groups` keyword (or a second `SQLAuthenticate users` line is overriding it) — mod_sql never performs group lookups, so no session joins sftpread/sftpwrite/sftpdelete. Keep exactly one line: `SQLAuthenticate users groups` |
 | Password always rejected | Old plaintext row (re-save the password in the app), or distro without bcrypt in crypt(3) — check `SQLAuthTypes`; on old distros switch app hashing strategy |
 | Key always rejected | Key column empty (`ssh_key IS NULL`) — the app only converts keys saved after this feature; re-save the key |
 | `no such user` | Row filtered out by the view — account disabled or owner deactivated/locked/closed |
