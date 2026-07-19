@@ -653,6 +653,8 @@ function accountsTableHtml(rows) {
     const rowsHtml = rows.map(a => `
         <tr>
             <td data-label="Username"><strong>${a.username}</strong></td>
+            <td data-label="Permissions">${(a.permissions||'').split(',').filter(Boolean)
+                .map(p => `<span class="badge bg-primary-subtle text-primary me-1" style="font-size:.7rem">${p}</span>`).join('') || '<span class="text-muted small">None</span>'}</td>
             <td data-label="Status">
                 <span class="badge bg-secondary-subtle text-secondary">${a.authenticationType||''}</span>
                 <span class="ms-1 ${a.enabled?'badge-on':'badge-off'}">${a.enabled?'Enabled':'Disabled'}</span>
@@ -663,7 +665,7 @@ function accountsTableHtml(rows) {
             </div></td>
         </tr>`).join('');
     return `<div class="portal-table-wrap"><table class="table portal-table">
-        <thead><tr><th>Username</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Username</th><th>Permissions</th><th>Status</th><th></th></tr></thead>
         <tbody>${rowsHtml}</tbody>
     </table></div>`;
 }
@@ -740,9 +742,14 @@ function openAccountForm(data={}) {
         setVal('acctUser', data.username);
         setVal('acctAuth', data.authenticationType);
         setVal('acctEnabled', data.enabled);
+        setVal('acctEmail', data.email);
         toggleAuth();
         // Password is never sent back by the API (stored as a hash) — blank means "keep current"
         if (data.publicKey) setVal('acctPk', data.publicKey);
+        const perms = (data.permissions || '').split(',');
+        document.getElementById('pRead').checked = perms.includes('READ');
+        document.getElementById('pWrite').checked = perms.includes('WRITE');
+        document.getElementById('pDelete').checked = perms.includes('DELETE');
     }
 }
 
