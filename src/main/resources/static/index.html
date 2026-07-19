@@ -213,6 +213,22 @@ function fmt(d) {
 function empty(tbody, cols) {
     document.getElementById(tbody).innerHTML = `<tr><td colspan="${cols}" class="text-center text-muted py-4">No records found</td></tr>`;
 }
+// Robust date/time formatter: handles ISO strings (with any fraction-digit
+// precision) AND Jackson's array form [y,m,d,h,min,s] — new Date() alone
+// yields "Invalid Date" for some of these.
+function fmtDateTime(v) {
+    if (!v) return '';
+    if (Array.isArray(v)) {
+        const [y, mo, d, h = 0, mi = 0] = v;
+        return `${String(d).padStart(2,'0')}/${String(mo).padStart(2,'0')}/${y} ` +
+               `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;
+    }
+    // Trim sub-millisecond fraction digits that some browsers reject
+    const cleaned = String(v).replace(/\.(\d{3})\d+/, '.$1');
+    const d = new Date(cleaned);
+    return isNaN(d) ? String(v) : d.toLocaleString();
+}
+
 function cardText(brand, last4, expiry) {
     if (!last4) return '<span class="text-muted">No card saved</span>';
     return `${(brand||'card').toUpperCase()} •••• ${last4}` + (expiry ? ` (exp ${expiry})` : '');
@@ -257,7 +273,7 @@ async function openBilling(userId) {
     const payments = await fetch(`${API}/billing/payments/byuser/${userId}`).then(r=>r.json()).catch(()=>[]);
     const rows = payments.length ? payments.map(p => `
         <tr>
-            <td class="small">${p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}</td>
+            <td class="small">${fmtDateTime(p.createdAt)}</td>
             <td class="small">$${(p.amountCents/100).toFixed(2)} ${(p.currency||'').toUpperCase()}</td>
             <td>${p.status === 'SUCCEEDED'
                 ? '<span class="badge-on">Succeeded</span>'

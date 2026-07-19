@@ -82,8 +82,14 @@ On the Postgres server (least privilege — ProFTPD only ever reads):
 ```sql
 CREATE ROLE proftpd LOGIN PASSWORD 'choose-a-strong-password';
 GRANT CONNECT ON DATABASE sftpmanager TO proftpd;
-GRANT SELECT ON proftpd_users, proftpd_allowed_ips, proftpd_groups TO proftpd;
 ```
+
+The `SELECT` grants on the three views are applied **automatically by the app
+at startup** (and re-applied every restart). This matters because the app's
+`ddl-auto=create` rebuilds the schema on every start, which would otherwise
+destroy manually-issued grants — the classic symptom being ProFTPD suddenly
+logging `permission denied for view proftpd_users` after an app restart.
+The role must be named exactly `proftpd` for the auto-grant to find it.
 
 Allow the SFTP host's IP in `pg_hba.conf` if it's a separate machine.
 
@@ -268,6 +274,7 @@ sudo ss -tlnp | grep proftpd      # what's actually listening
 | `no such user` | Row filtered out by the view — account disabled or owner deactivated/locked/closed |
 | Login OK but wrong directory | `CreateHome` missing, or `/srv/sftp` perms — homedir must be creatable by ProFTPD |
 | SQL connect errors | `pg_hba.conf` / role grants / `SQLConnectInfo` credentials |
+| `permission denied for view proftpd_...` appearing after an app restart | The app's schema rebuild destroyed the view grants. Newer app versions re-grant automatically at startup (role must be named `proftpd`); on older versions re-run the GRANT manually after each restart |
 
 ## Security notes
 

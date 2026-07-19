@@ -186,5 +186,18 @@ public class DataInitialiser implements CommandLineRunner {
                 OR (g.groupname = 'sftpdelete' AND v.permissions LIKE '%DELETE%'))
             GROUP BY g.groupname, g.gid
             """);
+
+        // ddl-auto=create rebuilds the schema on every start, which destroys
+        // any previously granted privileges on these views. Re-grant to the
+        // ProFTPD read-only role each time (no-op if the role doesn't exist,
+        // e.g. on dev machines without an SFTP host).
+        jdbcTemplate.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'proftpd') THEN
+                    GRANT SELECT ON proftpd_users, proftpd_allowed_ips, proftpd_groups TO proftpd;
+                END IF;
+            END $$
+            """);
     }
 }
