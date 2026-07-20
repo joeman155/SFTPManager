@@ -297,4 +297,34 @@ public class BillingService {
     private static String cardDisplay(String brand, String last4) {
         return (brand != null ? brand : "card") + " •••• " + (last4 != null ? last4 : "????");
     }
+
+    /**
+     * Marks one month as paid: extends paidToDate (from today, or from the
+     * current paid-to date if still in the future), ends any trial, and
+     * reactivates services. Used after successful subscription charges and
+     * by the admin "mark paid" action for off-platform payments.
+     */
+    public void activatePaidMonth(User user) {
+        LocalDate today = LocalDate.now();
+        LocalDate base = user.getPaidToDate() != null && user.getPaidToDate().isAfter(today)
+            ? user.getPaidToDate() : today;
+        user.setPaidToDate(base.plusMonths(1));
+        user.setTrialExpires(null);
+        user.setServicesDeactivated(false);
+        userRepository.save(user);
+        log.info("BILLING: {} marked paid through {}", user.getEmail(), user.getPaidToDate());
+    }
+
+    /** Records an off-platform payment (bank transfer etc.) without charging any card. */
+    public void recordManualPaid(User user, String adminEmail) {
+        Payment p = new Payment();
+        p.setUser(user);
+        p.setAmountCents(0L);
+        p.setCurrency(currency);
+        p.setStatus("SUCCEEDED");
+        p.setDescription("Marked paid by admin (no card charge)");
+        p.setInitiatedBy("ADMIN:" + adminEmail);
+        paymentRepository.save(p);
+        activatePaidMonth(user);
+    }
 }

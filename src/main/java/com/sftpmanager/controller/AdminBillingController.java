@@ -136,14 +136,32 @@ public class AdminBillingController {
         String description = body.get("description") != null
             ? String.valueOf(body.get("description")) : "Manual charge via admin";
         String adminEmail = principal != null ? principal.getAttribute("email") : "unknown";
+        boolean extendSubscription = !Boolean.FALSE.equals(body.get("extendSubscription"));
 
         BillingService.ChargeOutcome outcome = billingService.chargeUser(
             user, amountCents, description, "ADMIN:" + adminEmail, null);
+
+        // A successful subscription-type charge also advances paidToDate and
+        // ends the trial, so the portal reflects the payment immediately.
+        if (outcome.succeeded() && extendSubscription) {
+            billingService.activatePaidMonth(user);
+        }
 
         return ResponseEntity.ok(Map.of(
             "succeeded", outcome.succeeded(),
             "message", outcome.message()
         ));
+    }
+
+    /** Off-platform payment (bank transfer etc.): mark one month paid WITHOUT charging any card. */
+    @PostMapping("/mark-paid/{userId}")
+    public ResponseEntity<?> markPaid(@PathVariable Long userId,
+                                      @AuthenticationPrincipal OAuth2User principal) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) return ResponseEntity.notFound().build();
+        String adminEmail = principal != null ? principal.getAttribute("email") : "unknown";
+        billingService.recordManualPaid(user, adminEmail);
+        return ResponseEntity.ok(Map.of("success", true, "paidToDate", String.valueOf(user.getPaidToDate())));
     }
 
     @GetMapping("/payments")
