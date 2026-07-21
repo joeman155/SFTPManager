@@ -1100,46 +1100,119 @@ async function openChangePlan() {
         fetch('/portal/api/billing/cards').then(r => r.json()).catch(() => null)
     ]);
     window._upgradeHasCard = !!(cards && cards.primary);
+    window._planCtx = plansRes; // current plan/price/paidUp info, used for proration estimate
     window._pendingUpgrade = null;
-    const list = (plansRes.plans || []).map(p => `
-        <div class="plan-card" id="up-plan-${p.id}" onclick="selectUpgradePlan(${p.id}, '${p.plan}', ${p.monthlyPriceCents||0})">
+
+    const list = (plansRes.plans || []).map(p => {
+        const isCurrent = plansRes.currentPlanId === p.id;
+        return `
+        <div class="plan-card" id="up-plan-${p.id}"
+             style="${isCurrent ? 'opacity:.6;cursor:default' : ''}"
+             ${isCurrent ? '' : `onclick="selectUpgradePlan(${p.id}, '${p.plan}', ${p.monthlyPriceCents||0})"`}>
             <h6>${p.plan}${p.monthlyPriceCents ? ` — $${(p.monthlyPriceCents/100).toFixed(2)}/month` : ''}
-                ${plansRes.currentPlanId === p.id ? '<span class="badge bg-primary-subtle text-primary ms-2">Current plan</span>' : ''}</h6>
+                ${isCurrent ? '<span class="badge bg-primary-subtle text-primary ms-2">Current plan</span>' : ''}</h6>
             <p class="text-muted small mb-0">${p.description||''}</p>
-        </div>`).join('');
+        </div>`;
+    }).join('');
     openModal('Change Plan', `
         <p class="text-muted small">Choose the plan you want. If a payment is due, your saved card is charged
-        for the first month immediately${window._upgradeHasCard ? '' : ' — you will be asked to add a card first'}.</p>
+        immediately${window._upgradeHasCard ? '' : ' — you will be asked to add a card first'}. Moving to a
+        higher-priced plan credits the unused value of your current cycle.</p>
         <div id="upgrade-plan-list">${list}</div>
         <div id="upgrade-card-area" class="mt-2" style="display:none"></div>
-        <div class="d-flex justify-content-end gap-2 mt-3">
+        <div id="downgrade-request-area" class="mt-2" style="display:none"></div>
+        <div class="d-flex justify-content-end gap-2 mt-3" id="upgrade-actions">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary btn-sm" id="upgrade-go-btn" disabled onclick="confirmUpgrade()">Choose a plan above</button>
         </div>
     `);
 }
 
+// Mirrors BillingService.switchPaidPlan's proration math, for display only —
+// the server computes the authoritative amount at charge time.
+function estimateProratedCharge(newPriceCents) {
+    const ctx = window._planCtx || {};
+    if (!ctx.paidUp || ctx.currentPlanIsTrial || !ctx.currentPlanPriceCents || !ctx.paidToDate) return newPriceCents;
+    const daysRemaining = Math.max(0, Math.min(30, Math.round((new Date(ctx.paidToDate) - new Date()) / 86400000)));
+    const unusedCredit = Math.round(ctx.currentPlanPriceCents * (daysRemaining / 30));
+    return Math.max(0, newPriceCents - unusedCredit);
+}
+
 function selectUpgradePlan(planId, planName, priceCents) {
-    window._pendingUpgrade = { id: planId, name: planName, price: priceCents };
+    document.getElementById('downgrade-request-area').style.display = 'none';
+    document.getElementById('downgrade-request-area').innerHTML = '';
+    document.getElementById('upgrade-actions').style.display = 'flex';
+
+    const ctx = window._planCtx || {};
+    const isDowngrade = ctx.paidUp && !ctx.currentPlanIsTrial && ctx.currentPlanPriceCents != null
+        && priceCents < ctx.currentPlanPriceCents;
+
     document.querySelectorAll('#upgrade-plan-list .plan-card').forEach(c => c.classList.remove('selected'));
     document.getElementById('up-plan-' + planId).classList.add('selected');
+
+    if (isDowngrade) {
+        // Downgrades aren't automatic — collect a message and email support instead
+        window._pendingUpgrade = null;
+        document.getElementById('upgrade-actions').style.display = 'none';
+        const area = document.getElementById('downgrade-request-area');
+        area.style.display = 'block';
+        area.innerHTML = `
+            <div class="border rounded p-3" style="background:#f8f9fa">
+                <p class="small mb-2">Downgrading changes your billing, so we handle these personally to make
+                sure it's fair to you — no risk of being double-charged. Tell us a bit about what you need and
+                our support team will take care of it within 1 business day.</p>
+                <textarea class="form-control form-control-sm mb-2" id="downgrade-message" rows="3"
+                    placeholder="e.g. I'd like to move from Enterprise to Basic starting next month"></textarea>
+                <div class="field-error mb-2" id="downgrade-err"></div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+                    <button class="btn btn-primary btn-sm" onclick="sendDowngradeRequest(${planId})">Send request</button>
+                </div>
+            </div>`;
+        return;
+    }
+
+    const estimate = estimateProratedCharge(priceCents);
+    window._pendingUpgrade = { id: planId, name: planName, price: priceCents, estimate: estimate };
     const btn = document.getElementById('upgrade-go-btn');
     btn.disabled = false;
-    btn.textContent = `Upgrade to ${planName}` + (priceCents ? ` — $${(priceCents/100).toFixed(2)}/month` : '');
+    btn.textContent = estimate < priceCents && estimate > 0
+        ? `Switch to ${planName} — pay $${(estimate/100).toFixed(2)} now (prorated)`
+        : estimate === 0 && priceCents > 0
+        ? `Switch to ${planName} — no charge (covered by credit)`
+        : `Switch to ${planName}` + (priceCents ? ` — $${(priceCents/100).toFixed(2)}/month` : '');
 }
 
 function confirmUpgrade() {
     const sel = window._pendingUpgrade;
     if (!sel) return;
     if (window._upgradeHasCard) {
-        const price = sel.price ? ` ($${(sel.price/100).toFixed(2)}/month)` : '';
-        if (!confirm(`Switch to the ${sel.name} plan${price}? If a payment is due, your saved card will be charged now.`)) return;
+        const amountMsg = sel.estimate === 0 ? 'no charge (covered by your existing credit)' : `$${(sel.estimate/100).toFixed(2)} now`;
+        if (!confirm(`Switch to the ${sel.name} plan? This will charge ${amountMsg}.`)) return;
         submitPlanChange(sel.id);
     } else {
         // Need a card first — mount the secure card widget, then complete the switch
         const area = document.getElementById('upgrade-card-area');
         area.style.display = 'block';
         mountCardForm(area, 'PRIMARY', () => submitPlanChange(window._pendingUpgrade.id), true);
+    }
+}
+
+async function sendDowngradeRequest(planId) {
+    const message = document.getElementById('downgrade-message').value.trim();
+    const err = document.getElementById('downgrade-err');
+    if (!message) { err.textContent = 'Please enter a short message.'; return; }
+    err.textContent = '';
+    const r = await fetch('/portal/api/account/plan-request', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ planId: planId, message: message })
+    });
+    if (r.ok) {
+        alert("Thanks — we've received your request. Our support team will reach out within 1 business day to arrange your plan change.");
+        closeModal();
+    } else {
+        const data = await r.json().catch(() => ({}));
+        err.textContent = data.error || 'Could not send your request. Please try again.';
     }
 }
 
@@ -1152,7 +1225,9 @@ async function submitPlanChange(planId) {
     if (r.ok) {
         alert(data.paymentWarning
             ? data.paymentWarning
-            : `You are now on the ${data.plan} plan` + (data.charged ? ` — first month charged, paid to ${data.paidToDate}.` : '.'));
+            : `You are now on the ${data.plan} plan` + (data.charged !== undefined
+                ? (data.charged ? ` — charged $${((data.amountChargedCents||0)/100).toFixed(2)}, paid to ${data.paidToDate}.` : '.')
+                : '.'));
         window.location.reload();
     } else {
         alert(data.error || 'Could not change plan. Please try again.');

@@ -165,6 +165,28 @@ public class EmailService {
         sendHtml(supportEmail, "SFTP Manager — " + event + ": " + email, html);
     }
 
+    /** Customer-initiated plan change (typically a downgrade) that needs a human to action. */
+    @Async
+    public void sendPlanChangeRequest(String userEmail, String userName, String currentPlan,
+                                      String requestedPlan, String message) {
+        String html = """
+            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
+                <h2 style="color:#1a1f36">Plan change request</h2>
+                <table style="border-collapse:collapse;font-size:.95rem">
+                    <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Name</td><td style="padding:4px 0"><strong>%s</strong></td></tr>
+                    <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Email</td><td style="padding:4px 0">%s</td></tr>
+                    <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Current plan</td><td style="padding:4px 0">%s</td></tr>
+                    <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Requested plan</td><td style="padding:4px 0">%s</td></tr>
+                </table>
+                <p style="color:#6b7280;margin-top:16px">Customer's message:</p>
+                <div style="background:#f8f9fa;border-radius:8px;padding:16px;white-space:pre-wrap">%s</div>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager · plan change request</p>
+            </div>
+            """.formatted(userName, userEmail, currentPlan, requestedPlan, message);
+        sendHtml(supportEmail, "SFTP Manager — plan change request: " + userEmail, html);
+    }
+
     private void sendHtml(String to, String subject, String html) {
         try {
             MimeMessage msg = mailSender.createMimeMessage();

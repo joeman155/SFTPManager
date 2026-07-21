@@ -6,6 +6,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
@@ -50,9 +52,11 @@ public class UserController {
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable Long id,
                                     @Valid @RequestBody User user,
-                                    @RequestParam(required = false) Long accountControlsId) {
+                                    @RequestParam(required = false) Long accountControlsId,
+                                    @AuthenticationPrincipal OAuth2User principal) {
         try {
-            return ResponseEntity.ok(userService.update(id, user, accountControlsId));
+            String adminEmail = principal != null ? principal.getAttribute("email") : "unknown";
+            return ResponseEntity.ok(userService.update(id, user, accountControlsId, adminEmail));
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
         }

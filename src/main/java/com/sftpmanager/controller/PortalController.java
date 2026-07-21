@@ -605,24 +605,36 @@ public class PortalController {
 
     // ── Plans (upgrades / plan changes) ──
 
-    /** Paid plans the user can switch to (trial plans excluded). */
+    /** Paid plans the user can switch to (trial plans excluded), plus their current plan/billing state. */
     @GetMapping("/plans")
     public ResponseEntity<?> listPlans(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
         return currentUser(principal, session).<ResponseEntity<?>>map(user -> {
             List<AccountControls> plans = accountControlsRepository.findAll().stream()
                 .filter(p -> p.getTrialDays() == null || p.getTrialDays() <= 0)
                 .toList();
+            AccountControls current = user.getAccountControls();
+            boolean paidUp = user.getPaidToDate() != null && user.getPaidToDate().isAfter(java.time.LocalDate.now());
+
             java.util.Map<String, Object> out = new java.util.HashMap<>();
             out.put("plans", plans);
-            out.put("currentPlanId", user.getAccountControls() != null ? user.getAccountControls().getId() : null);
+            out.put("currentPlanId", current != null ? current.getId() : null);
+            out.put("currentPlanPriceCents", current != null ? current.getMonthlyPriceCents() : null);
+            out.put("currentPlanIsTrial", current != null && current.getTrialDays() != null && current.getTrialDays() > 0);
+            out.put("paidUp", paidUp);
+            out.put("paidToDate", user.getPaidToDate() != null ? user.getPaidToDate().toString() : null);
             return ResponseEntity.ok(out);
         }).orElse(ResponseEntity.status(401).build());
     }
 
     /**
-     * Switch to a paid plan. If the user isn't currently paid up, the first
-     * month is charged immediately (same rule as onboarding); if they're
-     * mid-cycle, the new price applies from the next renewal.
+     * Switch to a paid plan.
+     *  - Already on this plan: rejected, nothing happens.
+     *  - Mid-cycle upgrade (or lateral, same price): the unused value of the
+     *    current cycle is credited and only the difference is charged now.
+     *  - Mid-cycle downgrade: NOT applied here — the portal routes these to
+     *    /account/plan-request instead so a human can action it fairly; this
+     *    endpoint still refuses it server-side as a backstop.
+     *  - Not currently in a paid, active cycle: normal first-month billing.
      */
     @PostMapping("/account/plan")
     public ResponseEntity<?> changePlan(@AuthenticationPrincipal OAuth2User principal,
@@ -635,23 +647,56 @@ public class PortalController {
             if (plan == null || (plan.getTrialDays() != null && plan.getTrialDays() > 0)) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Invalid plan"));
             }
-            user.setAccountControls(plan);
+
+            var result = billingService.switchPaidPlan(user, plan, "PORTAL:" + user.getEmail(), false);
             user.setLastUpdatedBy(user.getEmail());
             userRepository.save(user);
 
-            var outcome = billingService.chargeFirstMonthIfDue(user);
             java.util.Map<String, Object> out = new java.util.HashMap<>();
+            if (result.samePlan()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "You are already on the " + plan.getPlan() + " plan."));
+            }
+            if (result.downgradeNeedsSupport()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Please use the \"Request a downgrade\" option to switch to a lower-priced plan.",
+                    "downgradeNeedsSupport", true));
+            }
+
             out.put("success", true);
             out.put("plan", plan.getPlan());
-            if (outcome != null) {
-                out.put("charged", outcome.succeeded());
-                if (!outcome.succeeded()) {
-                    out.put("paymentWarning", "Your card could not be charged (" + outcome.message()
+            if (result.charge() != null) {
+                out.put("charged", result.charge().succeeded());
+                out.put("amountChargedCents", result.amountDueCents());
+                if (!result.charge().succeeded()) {
+                    out.put("paymentWarning", "Your card could not be charged (" + result.charge().message()
                         + "). Please update your payment details to keep your services running.");
                 }
             }
             if (user.getPaidToDate() != null) out.put("paidToDate", user.getPaidToDate().toString());
             return ResponseEntity.ok(out);
+        }).orElse(ResponseEntity.status(401).build());
+    }
+
+    /** Downgrade (or any plan change the user wants handled personally) — emails support, changes nothing automatically. */
+    @PostMapping("/account/plan-request")
+    public ResponseEntity<?> planChangeRequest(@AuthenticationPrincipal OAuth2User principal,
+                                               @RequestBody Map<String, Object> body,
+                                               HttpSession session) {
+        return currentUser(principal, session).<ResponseEntity<?>>map(user -> {
+            String message = body.get("message") != null ? String.valueOf(body.get("message")).trim() : "";
+            if (message.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "Please enter a message"));
+
+            String requestedPlanName = "Not specified";
+            Long planId = body.get("planId") != null ? Long.valueOf(body.get("planId").toString()) : null;
+            if (planId != null) {
+                var p = accountControlsRepository.findById(planId).orElse(null);
+                if (p != null) requestedPlanName = p.getPlan();
+            }
+            String currentPlanName = user.getAccountControls() != null ? user.getAccountControls().getPlan() : "None";
+
+            emailService.sendPlanChangeRequest(user.getEmail(),
+                (user.getFirstName() + " " + user.getSurname()).trim(), currentPlanName, requestedPlanName, message);
+            return ResponseEntity.ok(Map.of("success", true));
         }).orElse(ResponseEntity.status(401).build());
     }
 

@@ -35,9 +35,8 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    public User update(Long id, User updated, Long accountControlsId) {
+    public User update(Long id, User updated, Long accountControlsId, String adminEmail) {
         return userRepository.findById(id).map(existing -> {
-            Long oldPlanId = existing.getAccountControls() != null ? existing.getAccountControls().getId() : null;
             existing.setFirstName(updated.getFirstName());
             existing.setSurname(updated.getSurname());
             existing.setCompany(updated.getCompany());
@@ -52,32 +51,35 @@ public class UserService {
             // Card data is managed exclusively via BillingService — admins
             // can no longer write card fields through user updates.
             existing.setLastUpdatedBy(updated.getLastUpdatedBy());
-            if (accountControlsId != null) {
-                accountControlsRepository.findById(accountControlsId).ifPresent(existing::setAccountControls);
-            }
-            User saved = userRepository.save(existing);
 
-            // Admin changed the user's plan — apply the same billing rules as
-            // the portal's Change Plan flow, so the account state stays honest.
-            Long newPlanId = saved.getAccountControls() != null ? saved.getAccountControls().getId() : null;
-            if (newPlanId != null && !newPlanId.equals(oldPlanId)) {
-                var plan = saved.getAccountControls();
-                if (plan.getTrialDays() != null && plan.getTrialDays() > 0) {
-                    // Assigned a trial plan: start its clock
-                    saved.setTrialExpires(java.time.LocalDate.now().plusDays(plan.getTrialDays()));
-                    saved.setPaidToDate(null);
-                    saved.setServicesDeactivated(false);
-                    saved = userRepository.save(saved);
-                } else {
-                    // Priced plan: charge the first month now if unpaid and a
-                    // card is on file (activation happens inside on success).
-                    // No card / charge failed => user keeps their current
-                    // trial state; use Mark Paid in the billing panel for
-                    // off-platform payments.
-                    billingService.chargeFirstMonthIfDue(saved);
+            // Plan change is handled BEFORE the save below, using the OLD plan
+            // still on `existing` — switchPaidPlan needs to see the prior plan
+            // to decide same-plan / upgrade-proration / downgrade correctly.
+            if (accountControlsId != null) {
+                var oldPlan = existing.getAccountControls();
+                var newPlan = accountControlsRepository.findById(accountControlsId).orElse(null);
+                if (newPlan != null && (oldPlan == null || !newPlan.getId().equals(oldPlan.getId()))) {
+                    if (newPlan.getTrialDays() != null && newPlan.getTrialDays() > 0) {
+                        // Assigned a trial plan: start its clock
+                        existing.setAccountControls(newPlan);
+                        existing.setTrialExpires(java.time.LocalDate.now().plusDays(newPlan.getTrialDays()));
+                        existing.setPaidToDate(null);
+                        existing.setServicesDeactivated(false);
+                    } else {
+                        // Priced plan: same billing rules as the portal's Change
+                        // Plan flow (upgrade = prorated charge now; not currently
+                        // paid up = first-month charge if a card is on file) —
+                        // EXCEPT downgrades, which admins can apply immediately
+                        // with no charge (allowDirectDowngrade=true); the
+                        // email-support loop is only for self-service customers.
+                        billingService.switchPaidPlan(existing, newPlan, "ADMIN:" + adminEmail, true);
+                    }
+                } else if (newPlan != null) {
+                    existing.setAccountControls(newPlan); // same plan re-selected — no billing action
                 }
             }
-            return saved;
+
+            return userRepository.save(existing);
         }).orElseThrow(() -> new RuntimeException("User not found: " + id));
     }
 

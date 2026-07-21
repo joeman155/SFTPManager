@@ -1,5 +1,6 @@
 package com.sftpmanager.service;
 
+import com.sftpmanager.model.AccountControls;
 import com.sftpmanager.model.Payment;
 import com.sftpmanager.model.User;
 import com.sftpmanager.repository.PaymentRepository;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.PostConstruct;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -159,6 +161,100 @@ public class BillingService {
 
         if (SLOT_BACKUP.equals(slot)) return null;
         return chargeFirstMonthIfDue(user);
+    }
+
+    /**
+     * Result of switchPaidPlan(): exactly one of samePlan / downgradeNeedsSupport
+     * / downgradedDirect is true, OR charge is set (upgrade path, or the
+     * "not currently paid up" fallback to first-month billing).
+     */
+    public record PlanChangeOutcome(boolean samePlan, boolean downgradeNeedsSupport,
+                                    boolean downgradedDirect, ChargeOutcome charge, long amountDueCents) {}
+
+    /**
+     * Switches a user between two priced, non-trial plans.
+     *  - Same plan selected again: no-op (samePlan=true), nothing charged.
+     *  - Currently mid-cycle on a paid plan, moving to a HIGHER (or equal)
+     *    price: prorates — the unused value of the current cycle (capped at
+     *    30 days) is credited against the new plan's price, and only the
+     *    difference is charged now. Success resets paidToDate to one month
+     *    from today under the new plan.
+     *  - Currently mid-cycle on a paid plan, moving to a LOWER price: not
+     *    applied automatically for self-service callers (downgradeNeedsSupport
+     *    =true, nothing changes) — fairly crediting a downgrade needs a human.
+     *    allowDirectDowngrade=true (admin only) applies it immediately instead,
+     *    with no charge and the existing paidToDate left untouched.
+     *  - Not currently in a paid, active cycle (trial / expired / no plan):
+     *    normal first-month billing via chargeFirstMonthIfDue — there's no
+     *    unused time to credit.
+     */
+    public PlanChangeOutcome switchPaidPlan(User user, AccountControls newPlan, String initiatedBy,
+                                            boolean allowDirectDowngrade) {
+        AccountControls oldPlan = user.getAccountControls();
+        if (oldPlan != null && oldPlan.getId().equals(newPlan.getId())) {
+            return new PlanChangeOutcome(true, false, false, null, 0);
+        }
+
+        LocalDate today = LocalDate.now();
+        boolean oldIsPricedNonTrial = oldPlan != null
+            && (oldPlan.getTrialDays() == null || oldPlan.getTrialDays() <= 0)
+            && oldPlan.getMonthlyPriceCents() != null && oldPlan.getMonthlyPriceCents() > 0;
+        boolean currentlyPaidUp = oldIsPricedNonTrial
+            && user.getPaidToDate() != null && user.getPaidToDate().isAfter(today);
+
+        long newPrice = newPlan.getMonthlyPriceCents() != null ? newPlan.getMonthlyPriceCents() : 0;
+
+        if (currentlyPaidUp) {
+            long oldPrice = oldPlan.getMonthlyPriceCents();
+
+            if (newPrice < oldPrice) {
+                if (!allowDirectDowngrade) {
+                    return new PlanChangeOutcome(false, true, false, null, 0);
+                }
+                user.setAccountControls(newPlan);
+                userRepository.save(user);
+                log.info("BILLING: {} downgraded {} -> {} by {} (no charge, paid-to unchanged at {})",
+                    user.getEmail(), oldPlan.getPlan(), newPlan.getPlan(), initiatedBy, user.getPaidToDate());
+                return new PlanChangeOutcome(false, false, true, null, 0);
+            }
+
+            // Upgrade (or same price): prorate the unused portion of the current cycle
+            long daysRemaining = Math.max(0, Math.min(30, ChronoUnit.DAYS.between(today, user.getPaidToDate())));
+            long unusedCredit = Math.round(oldPrice * (daysRemaining / 30.0));
+            long amountDue = Math.max(0, newPrice - unusedCredit);
+            String desc = "SFTP Manager — upgrade from " + oldPlan.getPlan() + " to " + newPlan.getPlan()
+                + " (prorated, " + daysRemaining + " day(s) credited)";
+
+            if (amountDue == 0) {
+                user.setAccountControls(newPlan);
+                user.setPaidToDate(today.plusMonths(1));
+                userRepository.save(user);
+                log.info("BILLING: {} switched {} -> {}, fully covered by proration credit, paid through {}",
+                    user.getEmail(), oldPlan.getPlan(), newPlan.getPlan(), user.getPaidToDate());
+                return new PlanChangeOutcome(false, false, false,
+                    new ChargeOutcome(true, "No charge — covered by your unused credit", null), 0);
+            }
+
+            String idempotency = "planchange-" + user.getId() + "-" + newPlan.getId() + "-" + today;
+            ChargeOutcome outcome = chargeUser(user, amountDue, desc, initiatedBy, idempotency);
+            if (outcome.succeeded()) {
+                user.setAccountControls(newPlan);
+                user.setPaidToDate(today.plusMonths(1));
+                userRepository.save(user);
+                log.info("BILLING: {} upgraded {} -> {}, charged {} cents, paid through {}",
+                    user.getEmail(), oldPlan.getPlan(), newPlan.getPlan(), amountDue, user.getPaidToDate());
+            } else {
+                log.warn("BILLING: upgrade charge failed for {} ({} -> {}) — {}",
+                    user.getEmail(), oldPlan.getPlan(), newPlan.getPlan(), outcome.message());
+            }
+            return new PlanChangeOutcome(false, false, false, outcome, amountDue);
+        }
+
+        // Not currently in a paid, active cycle — normal first-month billing applies
+        user.setAccountControls(newPlan);
+        userRepository.save(user);
+        ChargeOutcome outcome = chargeFirstMonthIfDue(user);
+        return new PlanChangeOutcome(false, false, false, outcome, outcome != null ? newPrice : 0);
     }
 
     /**
