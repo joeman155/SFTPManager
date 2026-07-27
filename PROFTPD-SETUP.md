@@ -487,3 +487,106 @@ Notes:
   four SQLNamedQuery lines — quotas are kernel-side now.
 - `df` inside the chroot still shows the whole filesystem; per-service usage
   is what `xfs_quota report -p` (and the portal) show.
+
+### 9. Public IP + port 22 redirect (iptables PREROUTING)
+
+Goal: customers connect with plain `sftp customer@sftphost001.leederville.net`
+(port 22, every client's default) while ProFTPD actually listens on 2222 and
+admin SSH moves to 2200.
+
+> **LOCKOUT WARNING — do the steps IN THIS ORDER.** Your admin SSH (and
+> `gcloud compute ssh`) uses port 22. Once the PREROUTING rule is in, port 22
+> belongs to ProFTPD — if sshd hasn't been moved and verified on 2200 first,
+> you lose access to the box. Break-glass if it happens anyway:
+> `gcloud compute connect-to-serial-port <VM> --zone=<ZONE>`.
+
+#### 9.1 Reserve a static public IP
+
+```bash
+gcloud compute addresses create sftp-public-ip --region=<REGION>
+gcloud compute addresses describe sftp-public-ip --region=<REGION> --format="get(address)"
+# note the IP
+
+# attach it (replaces the ephemeral IP; ~2s blip)
+gcloud compute instances delete-access-config <VM-NAME> --zone=<ZONE> --access-config-name="external-nat"
+gcloud compute instances add-access-config <VM-NAME> --zone=<ZONE> \
+    --access-config-name="external-nat" --address=<THE-IP>
+```
+
+#### 9.2 GCP firewall rules
+
+```bash
+gcloud compute instances add-tags <VM-NAME> --zone=<ZONE> --tags=sftp-host
+
+# customers: 22 (redirected to 2222) and 2222 direct
+gcloud compute firewall-rules create allow-sftp \
+    --target-tags=sftp-host --allow=tcp:22,tcp:2222 --source-ranges=0.0.0.0/0
+
+# admin SSH on its new port (tighten source-ranges to your IP if stable)
+gcloud compute firewall-rules create allow-admin-ssh \
+    --target-tags=sftp-host --allow=tcp:2200 --source-ranges=0.0.0.0/0
+```
+
+#### 9.3 Move admin sshd to 2200 — BEFORE any redirect
+
+On the VM:
+
+```bash
+sudo nano /etc/ssh/sshd_config     # have BOTH lines for now:  Port 22  /  Port 2200
+sudo systemctl restart sshd
+```
+
+From YOUR machine — do not continue until this works:
+
+```bash
+ssh -p 2200 you@<THE-IP>           # or: gcloud compute ssh <VM> --ssh-flag="-p 2200"
+```
+
+Only after 2200 is verified: remove the `Port 22` line, `sudo systemctl restart sshd`
+(your current session survives the restart).
+
+#### 9.4 The PREROUTING redirect
+
+```bash
+sudo iptables -t nat -A PREROUTING -p tcp --dport 22 -j REDIRECT --to-port 2222
+```
+
+External port 22 now lands on ProFTPD's 2222. Only affects traffic arriving
+from outside; the box's own outbound/local connections are untouched.
+
+Inspect / undo:
+
+```bash
+sudo iptables -t nat -L PREROUTING -n --line-numbers
+sudo iptables -t nat -D PREROUTING <line-number>      # remove if needed
+```
+
+#### 9.5 Persist across reboots
+
+```bash
+sudo apt-get install iptables-persistent    # answer Yes to "save current IPv4 rules"
+# after any later rule change:
+sudo netfilter-persistent save
+```
+
+#### 9.6 DNS
+
+Wherever leederville.net is hosted:
+
+```
+sftphost001.leederville.net.  A  <THE-IP>
+```
+
+(That's the hostname the app hands to customers via the `sftphost001`
+runtime setting — no app change needed.)
+
+#### 9.7 Test from outside
+
+```bash
+sftp -P 22   customer@sftphost001.leederville.net   # via the redirect
+sftp -P 2222 customer@sftphost001.leederville.net   # direct — keep this working too
+ssh  -p 2200 you@sftphost001.leederville.net        # admin access intact
+```
+
+Keep 2222 reachable as well as 22 — some corporate networks only allow
+explicitly whitelisted ports, and existing docs/clients may already use it.
