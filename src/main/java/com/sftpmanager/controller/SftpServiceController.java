@@ -18,14 +18,40 @@ import java.util.Map;
 public class SftpServiceController {
 
     private final SftpServiceService service;
+    private final com.sftpmanager.service.StorageUsageService storageUsageService;
 
-    public SftpServiceController(SftpServiceService service) {
+    public SftpServiceController(SftpServiceService service,
+                                 com.sftpmanager.service.StorageUsageService storageUsageService) {
         this.service = service;
+        this.storageUsageService = storageUsageService;
     }
 
     @GetMapping
     public ResponseEntity<List<SftpService>> getAll() {
         return ResponseEntity.ok(service.findAll());
+    }
+
+    /**
+     * Storage per service for the admin UI: real used bytes (measured by the
+     * SFTP host's XFS quota accounting) and the limit from the owner's plan.
+     * Response: { "<serviceId>": { "usedBytes": n, "limitBytes": n|null } }
+     */
+    @GetMapping("/storage")
+    public ResponseEntity<Map<Long, Map<String, Object>>> storage() {
+        List<SftpService> services = service.findAll();
+        Map<Long, Long> used = storageUsageService.usedBytesByServiceIds(
+            services.stream().map(SftpService::getId).toList());
+
+        Map<Long, Map<String, Object>> out = new HashMap<>();
+        for (SftpService s : services) {
+            Long limitMb = s.getUser() != null && s.getUser().getAccountControls() != null
+                ? s.getUser().getAccountControls().getMaxStorageMb() : null;
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("usedBytes", used.getOrDefault(s.getId(), 0L));
+            entry.put("limitBytes", limitMb != null ? limitMb * 1048576L : null);
+            out.put(s.getId(), entry);
+        }
+        return ResponseEntity.ok(out);
     }
 
     @GetMapping("/byuser/{userId}")

@@ -524,6 +524,14 @@ async function loadServices() {
         }
 
         window._svcData = window._svcData || {};
+        // Storage in exact BYTES: "5,242,880 B of 104,857,600 B"
+        const bytesCell = (id) => {
+            const used = (data.storageUsedBytes && data.storageUsedBytes[id] != null)
+                ? data.storageUsedBytes[id] : 0;
+            const limit = data.storageLimitBytes;
+            return used.toLocaleString() + ' B of '
+                + (limit != null ? limit.toLocaleString() + ' B' : 'unlimited');
+        };
         const rowsHtml = data.services.map(s => {
             window._svcData[s.id] = s;
             const desc = s.description
@@ -537,6 +545,7 @@ async function loadServices() {
                 + desc
                 + '</div></div></td>'
                 + '<td data-label="Host"><code class="small text-secondary">' + s.host + '</code></td>'
+                + '<td data-label="Storage"><span class="small text-secondary text-nowrap">' + bytesCell(s.id) + '</span></td>'
                 + '<td><div class="btn-row-actions">'
                 + '<button class="btn btn-sm btn-outline-secondary" onclick="copyHost(' + s.id + ')">'
                 + '<i class="bi bi-clipboard me-1"></i>Copy host</button>'
@@ -552,7 +561,7 @@ async function loadServices() {
                 + '</tr>';
         }).join('');
         container.innerHTML = '<div class="portal-table-wrap"><table class="table portal-table">'
-            + '<thead><tr><th>Service</th><th>Host</th><th></th></tr></thead>'
+            + '<thead><tr><th>Service</th><th>Host</th><th>Storage</th><th></th></tr></thead>'
             + '<tbody>' + rowsHtml + '</tbody>'
             + '</table></div>';
     } catch(e) {

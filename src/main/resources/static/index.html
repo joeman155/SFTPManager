@@ -83,7 +83,7 @@
         </div>
         <div class="table-card">
             <table class="table table-hover mb-0">
-                <thead class="table-light"><tr><th>Name</th><th>Host</th><th>Owner</th><th>Accounts</th><th>IP Rules</th><th>Created</th><th></th></tr></thead>
+                <thead class="table-light"><tr><th>Name</th><th>Host</th><th>Owner</th><th>Storage</th><th>Accounts</th><th>IP Rules</th><th>Created</th><th></th></tr></thead>
                 <tbody id="sftp-tbody"></tbody>
             </table>
         </div>
@@ -590,6 +590,14 @@ async function loadSftpServices() {
     let url = currentUserId ? `${API}/sftpservices/byuser/${currentUserId}` : `${API}/sftpservices`;
     const services = await fetch(url).then(r=>r.json()).catch(()=>[]);
     allSftpServices = await fetch(`${API}/sftpservices`).then(r=>r.json()).catch(()=>[]);
+    // Real used bytes + plan limit per service (measured by the SFTP host)
+    const storage = await fetch(`${API}/sftpservices/storage`).then(r=>r.json()).catch(()=>({}));
+    const bytesCell = (id) => {
+        const st = storage[id];
+        if (!st) return '—';
+        return `${(st.usedBytes||0).toLocaleString()} B of `
+            + (st.limitBytes != null ? `${st.limitBytes.toLocaleString()} B` : 'unlimited');
+    };
 
     const breadcrumb = document.getElementById('sftp-breadcrumb');
     if (currentUserId) {
@@ -606,11 +614,12 @@ async function loadSftpServices() {
     }
 
     const tbody = document.getElementById('sftp-tbody');
-    if (!services.length) { empty('sftp-tbody', 7); return; }
+    if (!services.length) { empty('sftp-tbody', 8); return; }
     tbody.innerHTML = services.map(s => `<tr>
         <td><strong>${s.name||''}</strong></td>
         <td><code>${s.host||''}</code></td>
         <td>${s.user ? `${s.user.firstName} ${s.user.surname}` : '—'}</td>
+        <td class="text-nowrap small text-muted">${bytesCell(s.id)}</td>
         <td><a href="#" class="text-decoration-none text-primary" onclick="drillAccounts(${s.id},'${s.name}')">
             <i class="bi bi-person-badge me-1"></i>Accounts</a></td>
         <td><a href="#" class="text-decoration-none text-primary" onclick="drillWhitelist(${s.id},'${s.name}')">
