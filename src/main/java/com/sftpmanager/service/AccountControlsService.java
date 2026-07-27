@@ -18,7 +18,7 @@ public class AccountControlsService {
     }
 
 
-    public List<AccountControls> findAll() { return repository.findAll(); }
+    public List<AccountControls> findAll() { return repository.findAllOrdered(); }
     public Optional<AccountControls> findById(Long id) { return repository.findById(id); }
     public AccountControls save(AccountControls controls) { return repository.save(controls); }
     public void deleteById(Long id) { repository.deleteById(id); }

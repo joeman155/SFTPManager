@@ -66,6 +66,16 @@ class AccountControlsServiceTest {
     }
 
     @Test
+    void findAllUsesTheStableBusinessOrdering() {
+        // Plain findAll() returns rows in Postgres physical order, which
+        // changes when a row is edited — listings must use findAllOrdered()
+        service.findAll();
+
+        verify(repository).findAllOrdered();
+        verify(repository, org.mockito.Mockito.never()).findAll();
+    }
+
+    @Test
     void saveAndDeleteDelegateToRepository() {
         AccountControls plan = new AccountControls();
         when(repository.save(plan)).thenReturn(plan);

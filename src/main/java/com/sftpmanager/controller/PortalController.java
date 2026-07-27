@@ -538,7 +538,7 @@ public class PortalController {
         // Plans live in account_controls (name, description, monthly price, limits).
         // Trial plans are silently omitted for IPs that have farmed too many accounts.
         boolean trialBlocked = isTrialBlocked(user, request);
-        List<AccountControls> plans = accountControlsRepository.findAll().stream()
+        List<AccountControls> plans = accountControlsRepository.findAllOrdered().stream()
             .filter(p -> !trialBlocked || p.getTrialDays() == null || p.getTrialDays() <= 0)
             .toList();
 
@@ -653,7 +653,7 @@ public class PortalController {
     @GetMapping("/plans")
     public ResponseEntity<?> listPlans(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
         return currentUser(principal, session).<ResponseEntity<?>>map(user -> {
-            List<AccountControls> plans = accountControlsRepository.findAll().stream()
+            List<AccountControls> plans = accountControlsRepository.findAllOrdered().stream()
                 .filter(p -> p.getTrialDays() == null || p.getTrialDays() <= 0)
                 .toList();
             AccountControls current = user.getAccountControls();
