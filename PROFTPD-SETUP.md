@@ -336,8 +336,23 @@ sudo xfs_growfs /srv/sftp
 
 #### 8.2 The quota reconciler
 
-`/usr/local/sbin/sftp-quota-sync` (run as root — it drives xfs_quota; DB
-password for the `proftpd` role goes in `/root/.pgpass`, mode 0600):
+The script authenticates to Postgres as the `proftpd` role via `/root/.pgpass`
+(it runs as root, so root's home). Set that up first:
+
+```bash
+# the role's password is whatever ProFTPD itself uses — find it with:
+sudo grep -r "SQLConnectInfo" /etc/proftpd/
+
+# then (fields: host:port:database:user:password — must match the DB= line
+# in the script below):
+sudo bash -c 'echo "127.0.0.1:5432:sftpmanager:proftpd:THE_PASSWORD" > /root/.pgpass'
+sudo chmod 600 /root/.pgpass     # mandatory — psql ignores a readable .pgpass
+
+# verify (no password prompt = working):
+sudo psql "host=127.0.0.1 dbname=sftpmanager user=proftpd" -c "SELECT 1"
+```
+
+`/usr/local/sbin/sftp-quota-sync` (run as root — it drives xfs_quota):
 
 ```bash
 #!/usr/bin/env bash
