@@ -228,8 +228,8 @@ public class PortalController {
         return currentUser(principal, session)
             .<ResponseEntity<?>>map(user -> {
                 var services = sftpServiceRepository.findByUserId(user.getId());
-                // Real disk usage per service, as tallied by ProFTPD
-                // (mod_quotatab + ScanOnLogin); limit comes from the plan
+                // Real disk usage per service, measured by XFS project quota
+                // accounting on the SFTP host; limit comes from the plan
                 var usedBytes = storageUsageService.usedBytesByServiceIds(
                     services.stream().map(SftpService::getId).toList());
                 Long limitMb = user.getAccountControls() != null

@@ -44,11 +44,11 @@ public class DataInitialiser implements CommandLineRunner {
 
             AccountControls basic = new AccountControls();
             basic.setPlan("Basic");
-            basic.setDescription("1 SFTP service. 10GB storage. Email support. Perfect for individuals and small teams.");
+            basic.setDescription("1 SFTP service. 100MB storage. Email support. Perfect for individuals and small teams.");
             basic.setMonthlyPriceCents(2900L);
             basic.setMaxUsers(5);
             basic.setMaxServers(1);
-            basic.setMaxStorageMb(10240L); // 10GB
+            basic.setMaxStorageMb(100L); // 100MB
             basic.setCreatedBy("system");
             basic.setLastUpdatedBy("system");
             accountControlsRepository.save(basic);
@@ -150,7 +150,7 @@ public class DataInitialiser implements CommandLineRunner {
             SELECT a.username                                            AS userid,
                    a.password                                            AS passwd,
                    2001                                                  AS uid,
-                   10000 + s.id                                          AS gid,
+                   2001                                                  AS gid,
                    '/srv/sftp/svc' || s.id                               AS homedir,
                    '/usr/sbin/nologin'                                   AS shell,
                    a.public_key_rfc4716                                  AS ssh_key,
@@ -174,12 +174,8 @@ public class DataInitialiser implements CommandLineRunner {
             """);
 
         // Synthetic groups mapping the app's READ/WRITE/DELETE permissions to
-        // ProFTPD <Limit AllowGroup> rules, PLUS one 'svc<id>' group per SFTP
-        // service. The svc group is each account's PRIMARY group (see gid in
-        // proftpd_users), which is what mod_quotatab keys its group quota on
-        // — capping the whole shared chroot no matter which account uploads.
-        // These groups exist only in SQL — no /etc/group entries needed;
-        // filesystem ownership stays uid 2001.
+        // ProFTPD <Limit AllowGroup> rules. These groups exist only in SQL —
+        // no /etc/group entries needed; filesystem ownership stays uid 2001.
         jdbcTemplate.execute("""
             CREATE OR REPLACE VIEW proftpd_groups AS
             SELECT g.groupname,
@@ -192,51 +188,30 @@ public class DataInitialiser implements CommandLineRunner {
                 OR (g.groupname = 'sftpwrite'  AND v.permissions LIKE '%WRITE%')
                 OR (g.groupname = 'sftpdelete' AND v.permissions LIKE '%DELETE%'))
             GROUP BY g.groupname, g.gid
-            UNION ALL
-            SELECT 'svc' || s.id,
-                   10000 + s.id,
-                   COALESCE(string_agg(a.username, ','), '')
-            FROM sftp_service s
-            LEFT JOIN sftp_service_account a
-                   ON a.sftp_service_id = s.id AND COALESCE(a.enabled, false) = true
-            GROUP BY s.id
             """);
 
-        // Storage quota per service: ProFTPD mod_quotatab_sql reads the limit
-        // from this view (sized by the owner's plan) and keeps its live byte
-        // tally in proftpd_quota_tallies. With QuotaOptions ScanOnLogin the
-        // tally is recalculated from ACTUAL disk usage at every login, so the
-        // table doubles as the usage figure shown in the portal.
+        // Storage quotas are enforced by XFS PROJECT QUOTAS on the SFTP host
+        // (kernel-level, exact — see PROFTPD-SETUP.md §8), not by ProFTPD.
+        // This view tells the host's sftp-quota-sync reconciler what limit
+        // each service directory should carry (from the owner's plan);
+        // quota_mb 0 = unlimited.
         jdbcTemplate.execute("""
-            CREATE OR REPLACE VIEW proftpd_quota_limits AS
-            SELECT 'svc' || s.id                  AS name,
-                   'group'                        AS quota_type,
-                   'false'                        AS per_session,
-                   'hard'                         AS limit_type,
-                   ac.max_storage_mb * 1048576    AS bytes_in_avail,
-                   0                              AS bytes_out_avail,
-                   0                              AS bytes_xfer_avail,
-                   0                              AS files_in_avail,
-                   0                              AS files_out_avail,
-                   0                              AS files_xfer_avail
+            CREATE OR REPLACE VIEW proftpd_service_quotas AS
+            SELECT s.id                             AS service_id,
+                   COALESCE(ac.max_storage_mb, 0)   AS quota_mb
             FROM sftp_service s
-            JOIN users u             ON u.id  = s.user_id
-            JOIN account_controls ac ON ac.id = u.account_controls_id
-            WHERE ac.max_storage_mb IS NOT NULL
+            JOIN users u              ON u.id  = s.user_id
+            LEFT JOIN account_controls ac ON ac.id = u.account_controls_id
             """);
 
-        // Tally table is WRITTEN by ProFTPD (not Hibernate-managed, so it
-        // survives ddl-auto=create schema rebuilds and keeps usage history).
+        // Real disk usage per service, written back by the host's
+        // sftp-quota-sync timer from xfs_quota's project report (~1/min).
+        // Not Hibernate-managed, so it survives ddl-auto=create rebuilds.
         jdbcTemplate.execute("""
-            CREATE TABLE IF NOT EXISTS proftpd_quota_tallies (
-                name            TEXT NOT NULL,
-                quota_type      TEXT NOT NULL,
-                bytes_in_used   BIGINT NOT NULL DEFAULT 0,
-                bytes_out_used  BIGINT NOT NULL DEFAULT 0,
-                bytes_xfer_used BIGINT NOT NULL DEFAULT 0,
-                files_in_used   BIGINT NOT NULL DEFAULT 0,
-                files_out_used  BIGINT NOT NULL DEFAULT 0,
-                files_xfer_used BIGINT NOT NULL DEFAULT 0
+            CREATE TABLE IF NOT EXISTS sftp_service_usage (
+                sftp_service_id BIGINT PRIMARY KEY,
+                used_bytes      BIGINT NOT NULL DEFAULT 0,
+                updated_at      TIMESTAMP NOT NULL DEFAULT now()
             )
             """);
 
@@ -249,9 +224,10 @@ public class DataInitialiser implements CommandLineRunner {
             BEGIN
                 IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'proftpd') THEN
                     GRANT SELECT ON proftpd_users, proftpd_allowed_ips, proftpd_groups,
-                                    proftpd_quota_limits TO proftpd;
-                    -- the ONLY write access ProFTPD has: its own quota tallies
-                    GRANT SELECT, INSERT, UPDATE, DELETE ON proftpd_quota_tallies TO proftpd;
+                                    proftpd_service_quotas TO proftpd;
+                    -- the ONLY write access the SFTP host has: reporting the
+                    -- real disk usage its quota reconciler measured
+                    GRANT SELECT, INSERT, UPDATE ON sftp_service_usage TO proftpd;
                 END IF;
             END $$
             """);

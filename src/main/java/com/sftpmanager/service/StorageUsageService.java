@@ -11,10 +11,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Reads per-service disk usage from proftpd_quota_tallies — the table
- * ProFTPD's mod_quotatab keeps up to date (recalculated from actual disk
- * usage at every login via QuotaOptions ScanOnLogin, tracked live during
- * sessions). The app only ever READS this table; ProFTPD owns the writes.
+ * Reads per-service disk usage from sftp_service_usage — real byte counts
+ * measured by XFS project quota accounting on the SFTP host and pushed back
+ * by its sftp-quota-sync timer (~every minute; see PROFTPD-SETUP.md §8).
+ * The app only ever READS this table; the host owns the writes.
  */
 @Service
 public class StorageUsageService {
@@ -28,28 +28,27 @@ public class StorageUsageService {
     }
 
     /**
-     * Bytes used per service id. Services with no tally yet (nothing ever
-     * uploaded) come back as 0.
+     * Bytes used per service id. Services the host hasn't reported yet
+     * (brand new, nothing uploaded) come back as 0.
      */
     public Map<Long, Long> usedBytesByServiceIds(List<Long> serviceIds) {
         Map<Long, Long> out = new HashMap<>();
         for (Long id : serviceIds) out.put(id, 0L);
         if (serviceIds.isEmpty()) return out;
 
-        // Group names are 'svc<id>' — ids come from our own DB, never user input
+        // Ids come from our own DB, never user input
         String inList = serviceIds.stream()
-            .map(id -> "'svc" + id + "'")
+            .map(String::valueOf)
             .collect(Collectors.joining(","));
         try {
             jdbcTemplate.query(
-                "SELECT name, bytes_in_used FROM proftpd_quota_tallies "
-                    + "WHERE quota_type = 'group' AND name IN (" + inList + ")",
+                "SELECT sftp_service_id, used_bytes FROM sftp_service_usage "
+                    + "WHERE sftp_service_id IN (" + inList + ")",
                 rs -> {
-                    long id = Long.parseLong(rs.getString("name").substring(3));
-                    out.put(id, Math.max(0, rs.getLong("bytes_in_used")));
+                    out.put(rs.getLong("sftp_service_id"), Math.max(0, rs.getLong("used_bytes")));
                 });
         } catch (Exception e) {
-            // Tally table missing (fresh dev DB before first start) or DB
+            // Usage table missing (fresh dev DB before first start) or DB
             // hiccup — usage display degrades to 0, never breaks the portal
             log.warn("Storage usage lookup failed: {}", e.getMessage());
         }

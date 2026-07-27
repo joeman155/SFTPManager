@@ -288,57 +288,144 @@ sudo ss -tlnp | grep proftpd      # what's actually listening
   SFTP operations their session may perform. Changing an account's
   permissions in the app takes effect on their next connection.
 
-### 8. Storage quotas (mod_quotatab_sql) — real disk usage per service
+### 8. Storage quotas (XFS project quotas) — kernel-enforced, per service
 
-The app publishes a per-service storage limit (from the owner's plan,
-`account_controls.max_storage_mb`) in the `proftpd_quota_limits` view, and
-each service account's PRIMARY group is its service's `svc<id>` group — so a
-single GROUP quota caps the whole shared chroot no matter which account
-uploads. ProFTPD keeps its byte tally in the `proftpd_quota_tallies` TABLE
-(the only thing it ever writes to the database), and `ScanOnLogin`
-recalculates that tally from ACTUAL on-disk usage at every login.
+Storage limits come from the owner's plan (`account_controls.max_storage_mb`,
+NULL = unlimited) and are enforced by the KERNEL via XFS project quotas on
+the service directory — exact real disk usage, every writer counted, no
+tallies to drift. ProFTPD needs no quota modules at all; when a service hits
+its cap, any SFTP write simply fails with "Disk quota exceeded".
+
+The app provides:
+- `proftpd_service_quotas` view — (service_id, quota_mb) per service, read by
+  the reconciler below (grants re-applied on every app start).
+- `sftp_service_usage` table — the reconciler writes real usage back here;
+  the portal displays it (the only DB write access this host has).
+
+#### 8.1 Create and mount the XFS data disk (GCP)
 
 ```bash
-sudo apt-get install proftpd-mod-quotatab proftpd-mod-quotatab-sql
+# from anywhere with gcloud:
+gcloud compute disks create sftp-data --size=500GB --type=pd-balanced --zone=<ZONE>
+gcloud compute instances attach-disk <SFTP-VM-NAME> --disk=sftp-data --zone=<ZONE>
+
+# on the SFTP host:
+lsblk                                   # identify the new device, e.g. /dev/sdb
+sudo mkfs.xfs -L sftpdata /dev/sdb
+sudo mkdir -p /srv/sftp
+echo 'LABEL=sftpdata /srv/sftp xfs defaults,prjquota 0 2' | sudo tee -a /etc/fstab
+sudo mount -a
+xfs_quota -x -c state /srv/sftp         # MUST show "Project quota state ... Accounting: ON, Enforcement: ON"
 ```
 
-Add inside the vhost:
+Migrating existing service data (if any):
 
-```apacheconf
-<IfModule mod_quotatab.c>
-    QuotaEngine       on
-    QuotaLock         /var/run/proftpd/quota.lock
-    # true up the tally from real disk usage at every login
-    QuotaOptions      ScanOnLogin
-    QuotaDisplayUnits Mb
-    QuotaShowQuotas   on
-    QuotaLimitTable   sql:/get-quota-limit
-    QuotaTallyTable   sql:/get-quota-tally/update-quota-tally/insert-quota-tally
-</IfModule>
+```bash
+sudo systemctl stop proftpd
+sudo rsync -a /old/location/svc*/ /srv/sftp/     # or gsutil -m rsync -r gs://<bucket> /srv/sftp
+sudo chown -R 2001:2001 /srv/sftp/svc*
+sudo systemctl start proftpd
+```
 
-SQLNamedQuery get-quota-limit SELECT "name, quota_type, per_session, limit_type, bytes_in_avail, bytes_out_avail, bytes_xfer_avail, files_in_avail, files_out_avail, files_xfer_avail FROM proftpd_quota_limits WHERE name = '%{0}' AND quota_type = '%{1}'"
-SQLNamedQuery get-quota-tally SELECT "name, quota_type, bytes_in_used, bytes_out_used, bytes_xfer_used, files_in_used, files_out_used, files_xfer_used FROM proftpd_quota_tallies WHERE name = '%{0}' AND quota_type = '%{1}'"
-SQLNamedQuery update-quota-tally UPDATE "bytes_in_used = bytes_in_used + %{0}, bytes_out_used = bytes_out_used + %{1}, bytes_xfer_used = bytes_xfer_used + %{2}, files_in_used = files_in_used + %{3}, files_out_used = files_out_used + %{4}, files_xfer_used = files_xfer_used + %{5} WHERE name = '%{6}' AND quota_type = '%{7}'" proftpd_quota_tallies
-SQLNamedQuery insert-quota-tally INSERT "%{0}, %{1}, %{2}, %{3}, %{4}, %{5}, %{6}, %{7}" proftpd_quota_tallies
+Growing later (online, no downtime):
+
+```bash
+gcloud compute disks resize sftp-data --size=1TB --zone=<ZONE>
+sudo xfs_growfs /srv/sftp
+```
+
+#### 8.2 The quota reconciler
+
+`/usr/local/sbin/sftp-quota-sync` (run as root — it drives xfs_quota; DB
+password for the `proftpd` role goes in `/root/.pgpass`, mode 0600):
+
+```bash
+#!/usr/bin/env bash
+# Applies plan storage limits to service dirs (XFS project quotas) and
+# reports real usage back to the app. Also creates the directory for any
+# newly provisioned service, so new services are ready within a minute.
+set -euo pipefail
+FS=/srv/sftp
+DB="host=127.0.0.1 dbname=sftpmanager user=proftpd"
+
+# 1. every service: dir exists, is an XFS project, carries its plan limit
+psql "$DB" -Atc "SELECT service_id, quota_mb FROM proftpd_service_quotas" |
+while IFS='|' read -r id mb; do
+    dir="$FS/svc$id"
+    if [ ! -d "$dir" ]; then
+        mkdir -p "$dir" && chown 2001:2001 "$dir" && chmod 750 "$dir"
+    fi
+    if ! grep -q "^$id:" /etc/projects 2>/dev/null; then
+        echo "$id:$dir" >> /etc/projects
+        echo "svc$id:$id" >> /etc/projid
+        xfs_quota -x -c "project -s svc$id" "$FS" >/dev/null
+    fi
+    xfs_quota -x -c "limit -p bhard=${mb}m svc$id" "$FS"    # bhard=0m = unlimited
+done
+
+# 2. report real usage back for the portal (report is in 1K blocks)
+xfs_quota -x -c 'report -p -N -b' "$FS" | while read -r proj used _rest; do
+    id="${proj#svc}"
+    [[ "$id" =~ ^[0-9]+$ ]] || continue
+    psql "$DB" -qc "INSERT INTO sftp_service_usage (sftp_service_id, used_bytes, updated_at)
+                    VALUES ($id, ${used}::bigint * 1024, now())
+                    ON CONFLICT (sftp_service_id)
+                    DO UPDATE SET used_bytes = EXCLUDED.used_bytes, updated_at = now()"
+done
+```
+
+```bash
+sudo chmod 700 /usr/local/sbin/sftp-quota-sync
+```
+
+Run it every minute via systemd:
+
+```ini
+# /etc/systemd/system/sftp-quota-sync.service
+[Unit]
+Description=Sync SFTP storage quotas and usage
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sftp-quota-sync
+```
+
+```ini
+# /etc/systemd/system/sftp-quota-sync.timer
+[Unit]
+Description=Run sftp-quota-sync every minute
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=60
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now sftp-quota-sync.timer
+```
+
+#### 8.3 Verify
+
+```bash
+sudo /usr/local/sbin/sftp-quota-sync            # run once by hand — no errors
+xfs_quota -x -c 'report -p -h' /srv/sftp        # limits + usage per svc project
+psql "host=127.0.0.1 dbname=sftpmanager user=proftpd" \
+  -c "SELECT * FROM sftp_service_usage ORDER BY sftp_service_id"
+
+# end-to-end: upload past a trial plan's limit -> client shows
+# "Disk quota exceeded"; portal usage bar updates within a minute
 ```
 
 Notes:
-- The app grants the `proftpd` role SELECT on `proftpd_quota_limits` and
-  SELECT/INSERT/UPDATE/DELETE on `proftpd_quota_tallies` at every startup
-  (same re-grant mechanism as the other views).
-- A plan upgrade changes the limit instantly — it's a view over
-  `account_controls`, nothing to sync.
-- The portal shows usage straight from `proftpd_quota_tallies`
-  (`bytes_in_used` where `name = 'svc<id>'`).
-- When the limit is hit the client sees "Quota exceeded" and the upload is
-  refused; `QuotaShowQuotas on` lets `sftp> quote SITE QUOTA` display usage.
-- Services on plans with `max_storage_mb` NULL have no limit row = unlimited.
-
-Verify after restart:
-
-```bash
-sudo proftpd -t                       # config parses
-psql -U proftpd -d sftpmanager \
-  -c "SELECT * FROM proftpd_quota_limits LIMIT 3"
-# upload past the limit on a trial account -> expect "552 Quota exceeded"
-```
+- Plan changes flow automatically: admin edits max_storage_mb (or the user
+  upgrades) -> the view reflects it -> the next timer tick applies the new
+  limit. Nothing to deploy.
+- If you previously enabled the mod_quotatab config from an earlier revision
+  of this file, REMOVE that whole `<IfModule mod_quotatab.c>` block and its
+  four SQLNamedQuery lines — quotas are kernel-side now.
+- `df` inside the chroot still shows the whole filesystem; per-service usage
+  is what `xfs_quota report -p` (and the portal) show.

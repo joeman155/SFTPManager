@@ -27,8 +27,8 @@ public class AccountControls {
     @Column(name = "max_servers")
     private Integer maxServers;
 
-    // Storage cap per SFTP service in MB, enforced by ProFTPD mod_quotatab
-    // (group quota per service). Null = unlimited.
+    // Storage cap per SFTP service in MB, enforced by XFS project quotas on
+    // the SFTP host (kernel-level; see PROFTPD-SETUP.md §8). Null = unlimited.
     @Column(name = "max_storage_mb")
     private Long maxStorageMb;
 

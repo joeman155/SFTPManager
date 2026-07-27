@@ -127,7 +127,7 @@
         </div>
         <div class="table-card">
             <table class="table table-hover mb-0">
-                <thead class="table-light"><tr><th>Plan</th><th>Monthly Price</th><th>Trial</th><th>Max Users</th><th>Max Servers</th><th>Users on Plan</th><th></th></tr></thead>
+                <thead class="table-light"><tr><th>Plan</th><th>Monthly Price</th><th>Trial</th><th>Max Users</th><th>Max Servers</th><th>Storage</th><th>Users on Plan</th><th></th></tr></thead>
                 <tbody id="controls-tbody"></tbody>
             </table>
         </div>
@@ -657,6 +657,12 @@ async function loadWhitelist() {
     </tr>`).join('');
 }
 
+// Storage cap for display: 100 -> "100 MB", 10240 -> "10 GB", null -> unlimited
+function fmtStorageMb(mb) {
+    if (mb == null || mb === 0) return '∞';
+    return mb >= 1024 ? (mb % 1024 === 0 ? (mb/1024) : (mb/1024).toFixed(1)) + ' GB' : mb + ' MB';
+}
+
 async function loadControls() {
     const [controls, users] = await Promise.all([
         fetch(`${API}/accountcontrols`).then(r=>r.json()).catch(()=>[]),
@@ -664,7 +670,7 @@ async function loadControls() {
     ]);
     allControls = controls;
     const tbody = document.getElementById('controls-tbody');
-    if (!controls.length) { empty('controls-tbody', 7); return; }
+    if (!controls.length) { empty('controls-tbody', 8); return; }
     tbody.innerHTML = controls.map(c => {
         const usersOnPlan = users.filter(u => u.accountControls && u.accountControls.id === c.id).length;
         return `<tr>
@@ -673,6 +679,7 @@ async function loadControls() {
             <td>${c.trialDays ? c.trialDays + ' days' : '—'}</td>
             <td>${c.maxUsers||'—'}</td>
             <td>${c.maxServers||'—'}</td>
+            <td>${fmtStorageMb(c.maxStorageMb)}</td>
             <td>${usersOnPlan}</td>
             ${actionBtns(`editControls(${c.id})`,`deleteControls(${c.id})`)}
         </tr>`;
@@ -1151,6 +1158,7 @@ function openControlsForm(data={}) {
             ${fld('Monthly Price ($)','ctrlPrice','number','e.g. 29.00')}
             ${fld('Max Users','ctrlMaxUsers','number','e.g. 50',true)}
             ${fld('Max Servers','ctrlMaxServers','number','e.g. 10',true)}
+            ${fld('Storage per Service (MB, blank = unlimited)','ctrlMaxStorageMb','number','e.g. 100')}
             ${fld('Trial Days (blank = not a trial)','ctrlTrialDays','number','e.g. 7')}
             <div class="col-12 mb-3">
                 <label class="form-label small fw-semibold">Description <span class="text-muted fw-normal">(shown to customers when choosing a plan)</span></label>
@@ -1161,6 +1169,7 @@ function openControlsForm(data={}) {
     `);
     if (data.id) {
         setVal('ctrlPlan', data.plan); setVal('ctrlMaxUsers', data.maxUsers); setVal('ctrlMaxServers', data.maxServers);
+        setVal('ctrlMaxStorageMb', data.maxStorageMb != null ? data.maxStorageMb : '');
         setVal('ctrlDesc', data.description);
         setVal('ctrlPrice', data.monthlyPriceCents != null ? (data.monthlyPriceCents/100).toFixed(2) : '');
         setVal('ctrlTrialDays', data.trialDays != null ? data.trialDays : '');
@@ -1177,6 +1186,8 @@ async function saveControls() {
         monthlyPriceCents: price !== '' && !isNaN(parseFloat(price)) ? Math.round(parseFloat(price) * 100) : null,
         maxUsers: parseInt(getVal('ctrlMaxUsers')),
         maxServers: parseInt(getVal('ctrlMaxServers')),
+        maxStorageMb: getVal('ctrlMaxStorageMb') !== '' && !isNaN(parseInt(getVal('ctrlMaxStorageMb')))
+            ? parseInt(getVal('ctrlMaxStorageMb')) : null,
         trialDays: trialDays !== '' && !isNaN(parseInt(trialDays)) ? parseInt(trialDays) : null
     };
     const url = editingId ? `${API}/accountcontrols/${editingId}` : `${API}/accountcontrols`;
