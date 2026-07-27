@@ -2,6 +2,11 @@
 
 See `DOCUMENTATION.md` §3.1 for the element list (controllers/services involved).
 
+![Diagram](images/process-signup-onboarding.svg)
+
+<details>
+<summary>Mermaid source (click to expand — editable at mermaid.live)</summary>
+
 ```mermaid
 flowchart TD
     A[Visitor opens Portal Login] --> B{Sign-in method}
@@ -48,6 +53,8 @@ flowchart TD
     AC --> AD
     AD --> Z
 ```
+
+</details>
 
 **Key points**
 - Support (`support@leederville.net`) gets notified twice per completed

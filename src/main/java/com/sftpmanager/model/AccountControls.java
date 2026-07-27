@@ -27,6 +27,11 @@ public class AccountControls {
     @Column(name = "max_servers")
     private Integer maxServers;
 
+    // Storage cap per SFTP service in MB, enforced by ProFTPD mod_quotatab
+    // (group quota per service). Null = unlimited.
+    @Column(name = "max_storage_mb")
+    private Long maxStorageMb;
+
     // Non-null = this plan is a time-limited trial of that many days
     @Column(name = "trial_days")
     private Integer trialDays;
@@ -108,6 +113,13 @@ public class AccountControls {
 
     public void setMaxServers(Integer maxServers) {
         this.maxServers = maxServers;
+    }
+    public Long getMaxStorageMb() {
+        return maxStorageMb;
+    }
+
+    public void setMaxStorageMb(Long maxStorageMb) {
+        this.maxStorageMb = maxStorageMb;
     }
     public Integer getTrialDays() {
         return trialDays;

@@ -8,6 +8,8 @@ import com.sftpmanager.repository.RuntimeSettingsRepository;
 import com.sftpmanager.repository.*;
 import org.springframework.http.HttpStatus;
 import jakarta.servlet.http.HttpSession;
+import jakarta.validation.Valid;
+import jakarta.validation.Validator;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -33,6 +35,8 @@ public class PortalController {
     private final EmailVerificationRepository verificationRepository;
     private final com.sftpmanager.service.BillingService billingService;
     private final com.sftpmanager.service.SftpCredentialService sftpCredentialService;
+    private final com.sftpmanager.service.StorageUsageService storageUsageService;
+    private final Validator validator;
 
     public PortalController(PortalUserRepository portalUserRepository,
                             UserRepository userRepository,
@@ -44,7 +48,9 @@ public class PortalController {
                             EmailService emailService,
                             EmailVerificationRepository verificationRepository,
                             com.sftpmanager.service.BillingService billingService,
-                            com.sftpmanager.service.SftpCredentialService sftpCredentialService) {
+                            com.sftpmanager.service.SftpCredentialService sftpCredentialService,
+                            com.sftpmanager.service.StorageUsageService storageUsageService,
+                            Validator validator) {
         this.portalUserRepository = portalUserRepository;
         this.userRepository = userRepository;
         this.sftpServiceRepository = sftpServiceRepository;
@@ -56,6 +62,25 @@ public class PortalController {
         this.verificationRepository = verificationRepository;
         this.billingService = billingService;
         this.sftpCredentialService = sftpCredentialService;
+        this.storageUsageService = storageUsageService;
+        this.validator = validator;
+    }
+
+    /**
+     * Validates an entity with the bean-validation constraints and returns a
+     * field→message map like GlobalExceptionHandler does for @Valid bodies,
+     * or null when the entity is valid. Used where @Valid can't be — bodies
+     * bound as Maps, and entities whose required fields are set server-side
+     * after binding.
+     */
+    private Map<String, String> constraintErrors(Object entity, String... ignoredFields) {
+        var ignored = java.util.Set.of(ignoredFields);
+        var errors = new java.util.HashMap<String, String>();
+        for (var v : validator.validate(entity)) {
+            String field = v.getPropertyPath().toString();
+            if (!ignored.contains(field)) errors.put(field, v.getMessage());
+        }
+        return errors.isEmpty() ? null : errors;
     }
 
     @org.springframework.beans.factory.annotation.Value("${signup.trial-ip-limit:5}")
@@ -201,10 +226,22 @@ public class PortalController {
     @GetMapping("/services")
     public ResponseEntity<?> getServices(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
         return currentUser(principal, session)
-            .map(user -> ResponseEntity.ok(Map.of(
-                "linked", true,
-                "services", sftpServiceRepository.findByUserId(user.getId())
-            )))
+            .<ResponseEntity<?>>map(user -> {
+                var services = sftpServiceRepository.findByUserId(user.getId());
+                // Real disk usage per service, as tallied by ProFTPD
+                // (mod_quotatab + ScanOnLogin); limit comes from the plan
+                var usedBytes = storageUsageService.usedBytesByServiceIds(
+                    services.stream().map(SftpService::getId).toList());
+                Long limitMb = user.getAccountControls() != null
+                    ? user.getAccountControls().getMaxStorageMb() : null;
+
+                var out = new java.util.HashMap<String, Object>();
+                out.put("linked", true);
+                out.put("services", services);
+                out.put("storageUsedBytes", usedBytes);                          // {serviceId: bytes}
+                out.put("storageLimitBytes", limitMb != null ? limitMb * 1048576L : null); // null = unlimited
+                return ResponseEntity.ok(out);
+            })
             .orElse(ResponseEntity.status(401).build());
     }
 
@@ -225,6 +262,11 @@ public class PortalController {
                                            @RequestBody SftpService service,
                                            HttpSession session) {
         return currentUser(principal, session).<ResponseEntity<?>>map(user -> {
+            // Host is assigned server-side below, so @Valid can't be used on
+            // the body (it would demand a host from the client) — check the
+            // client-supplied fields programmatically instead.
+            var errors = constraintErrors(service, "host");
+            if (errors != null) return ResponseEntity.badRequest().body(errors);
             // Enforce the plan's server limit (null = unlimited)
             AccountControls plan = user.getAccountControls();
             if (plan != null && plan.getMaxServers() != null) {
@@ -254,17 +296,19 @@ public class PortalController {
                                            @PathVariable Long id,
                                            @RequestBody SftpService updated,
                                            HttpSession session) {
-        return currentUser(principal, session).map(user ->
-            sftpServiceRepository.findById(id)
+        return currentUser(principal, session).<ResponseEntity<?>>map(user -> {
+            var errors = constraintErrors(updated, "host");
+            if (errors != null) return ResponseEntity.badRequest().body(errors);
+            return sftpServiceRepository.findById(id)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
-                .map(s -> {
+                .<ResponseEntity<?>>map(s -> {
                     s.setName(updated.getName());
                     s.setDescription(updated.getDescription());
                     s.setLastUpdatedBy(user.getEmail());
                     return ResponseEntity.ok(sftpServiceRepository.save(s));
                 })
-                .orElse(ResponseEntity.status(403).build())
-        ).orElse(ResponseEntity.status(401).build());
+                .orElse(ResponseEntity.status(403).build());
+        }).orElse(ResponseEntity.status(401).build());
     }
 
     @DeleteMapping("/services/{id}")
@@ -295,7 +339,7 @@ public class PortalController {
     @PostMapping("/services/{svcId}/accounts")
     public ResponseEntity<?> createAccount(@AuthenticationPrincipal OAuth2User principal,
                                            @PathVariable Long svcId,
-                                           @RequestBody SftpServiceAccount account,
+                                           @Valid @RequestBody SftpServiceAccount account,
                                            HttpSession session) {
         return currentUser(principal, session).<ResponseEntity<?>>map(user ->
             sftpServiceRepository.findById(svcId)
@@ -317,7 +361,7 @@ public class PortalController {
     public ResponseEntity<?> updateAccount(@AuthenticationPrincipal OAuth2User principal,
                                            @PathVariable Long svcId,
                                            @PathVariable Long id,
-                                           @RequestBody SftpServiceAccount updated,
+                                           @Valid @RequestBody SftpServiceAccount updated,
                                            HttpSession session) {
         return currentUser(principal, session).<ResponseEntity<?>>map(user ->
             accountRepository.findById(id)
@@ -375,7 +419,7 @@ public class PortalController {
     @PostMapping("/services/{svcId}/whitelist")
     public ResponseEntity<?> createWhitelist(@AuthenticationPrincipal OAuth2User principal,
                                              @PathVariable Long svcId,
-                                             @RequestBody SftpServiceIpWhitelist entry,
+                                             @Valid @RequestBody SftpServiceIpWhitelist entry,
                                            HttpSession session) {
         return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(svcId)
@@ -394,7 +438,7 @@ public class PortalController {
     public ResponseEntity<?> updateWhitelist(@AuthenticationPrincipal OAuth2User principal,
                                              @PathVariable Long svcId,
                                              @PathVariable Long id,
-                                             @RequestBody SftpServiceIpWhitelist updated,
+                                             @Valid @RequestBody SftpServiceIpWhitelist updated,
                                            HttpSession session) {
         return currentUser(principal, session).map(user ->
             whitelistRepository.findById(id)
@@ -744,6 +788,12 @@ public class PortalController {
             if (body.get("postcode")    != null) user.setPostcode((String) body.get("postcode"));
             if (body.get("country")     != null) user.setCountry((String) body.get("country"));
             // Card changes go through /portal/api/billing — never through here.
+
+            // The body is a Map, so @Valid can't check it — validate the
+            // mutated entity before saving for a clean 400 instead of a
+            // constraint blow-up at flush time.
+            var errors = constraintErrors(user);
+            if (errors != null) return ResponseEntity.badRequest().body(errors);
 
             user.setLastUpdatedBy(email);
             return ResponseEntity.ok(userRepository.save(user));

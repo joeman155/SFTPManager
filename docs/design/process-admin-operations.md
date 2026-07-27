@@ -2,6 +2,11 @@
 
 See `DOCUMENTATION.md` §3.8 for the element list.
 
+![Diagram](images/process-admin-operations.svg)
+
+<details>
+<summary>Mermaid source (click to expand — editable at mermaid.live)</summary>
+
 ```mermaid
 flowchart TD
     A[Admin browser] --> B["/oauth2/authorization/google-admin"]
@@ -22,6 +27,8 @@ flowchart TD
     J --> K
     K --> L["No server restart needed for any of it<br/>(Runtime Settings changes are read live)"]
 ```
+
+</details>
 
 **Key points**
 - Admin access is gated purely by `role = 10` on the `User` row — there's no

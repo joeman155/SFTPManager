@@ -21,6 +21,12 @@
 
     <properties>
         <java.version>17</java.version>
+        <!-- Spring Boot 3.2 bundles Mockito 5.7 / Byte Buddy 1.14, which
+             cannot instrument classes on JDKs newer than 21. These overrides
+             let the unit tests run on the current JDK (NetBeans runs tests
+             with its own runtime JDK, not the java.version target). -->
+        <mockito.version>5.18.0</mockito.version>
+        <byte-buddy.version>1.17.5</byte-buddy.version>
     </properties>
 
     <dependencies>

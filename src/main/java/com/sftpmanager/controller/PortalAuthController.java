@@ -27,6 +27,7 @@ public class PortalAuthController {
     private final EmailVerificationRepository verificationRepository;
     private final PasswordResetRepository passwordResetRepository;
     private final EmailService emailService;
+    private final jakarta.validation.Validator validator;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     private static final int MAX_ATTEMPTS = 3;
@@ -40,11 +41,13 @@ public class PortalAuthController {
     public PortalAuthController(UserRepository userRepository,
                                 EmailVerificationRepository verificationRepository,
                                 PasswordResetRepository passwordResetRepository,
-                                EmailService emailService) {
+                                EmailService emailService,
+                                jakarta.validation.Validator validator) {
         this.userRepository = userRepository;
         this.verificationRepository = verificationRepository;
         this.passwordResetRepository = passwordResetRepository;
         this.emailService = emailService;
+        this.validator = validator;
     }
 
     private boolean verifyRecaptcha(String token) {
@@ -185,6 +188,14 @@ public class PortalAuthController {
             user.setCreatedBy("email-signup");
             user.setLastUpdatedBy("email-signup");
             user.setSignupIp(com.sftpmanager.util.RequestIp.of(request));
+
+            // Clean 400 for constraint breaches (e.g. malformed email) instead
+            // of a constraint blow-up at flush time
+            var violations = validator.validate(user);
+            if (!violations.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", violations.iterator().next().getMessage()));
+            }
             userRepository.save(user);
 
             emailService.sendSignupNotification("New signup (email/password)",

@@ -6,6 +6,11 @@ carried by most tables but omitted from the boxes below for readability —
 see the source model classes in `src/main/java/com/sftpmanager/model/` for
 the exact list per entity.
 
+![Data model diagram](images/data-model.svg)
+
+<details>
+<summary>Mermaid source (click to expand — editable at mermaid.live)</summary>
+
 ```mermaid
 erDiagram
     ACCOUNT_CONTROLS ||--o{ USERS : "assigned plan"
@@ -129,6 +134,8 @@ erDiagram
         text value
     }
 ```
+
+</details>
 
 ## Notes
 

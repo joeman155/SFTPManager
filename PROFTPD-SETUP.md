@@ -287,3 +287,58 @@ sudo ss -tlnp | grep proftpd      # what's actually listening
   uid/gid. All files stay owned by uid 2001; what varies per user is which
   SFTP operations their session may perform. Changing an account's
   permissions in the app takes effect on their next connection.
+
+### 8. Storage quotas (mod_quotatab_sql) — real disk usage per service
+
+The app publishes a per-service storage limit (from the owner's plan,
+`account_controls.max_storage_mb`) in the `proftpd_quota_limits` view, and
+each service account's PRIMARY group is its service's `svc<id>` group — so a
+single GROUP quota caps the whole shared chroot no matter which account
+uploads. ProFTPD keeps its byte tally in the `proftpd_quota_tallies` TABLE
+(the only thing it ever writes to the database), and `ScanOnLogin`
+recalculates that tally from ACTUAL on-disk usage at every login.
+
+```bash
+sudo apt-get install proftpd-mod-quotatab proftpd-mod-quotatab-sql
+```
+
+Add inside the vhost:
+
+```apacheconf
+<IfModule mod_quotatab.c>
+    QuotaEngine       on
+    QuotaLock         /var/run/proftpd/quota.lock
+    # true up the tally from real disk usage at every login
+    QuotaOptions      ScanOnLogin
+    QuotaDisplayUnits Mb
+    QuotaShowQuotas   on
+    QuotaLimitTable   sql:/get-quota-limit
+    QuotaTallyTable   sql:/get-quota-tally/update-quota-tally/insert-quota-tally
+</IfModule>
+
+SQLNamedQuery get-quota-limit SELECT "name, quota_type, per_session, limit_type, bytes_in_avail, bytes_out_avail, bytes_xfer_avail, files_in_avail, files_out_avail, files_xfer_avail FROM proftpd_quota_limits WHERE name = '%{0}' AND quota_type = '%{1}'"
+SQLNamedQuery get-quota-tally SELECT "name, quota_type, bytes_in_used, bytes_out_used, bytes_xfer_used, files_in_used, files_out_used, files_xfer_used FROM proftpd_quota_tallies WHERE name = '%{0}' AND quota_type = '%{1}'"
+SQLNamedQuery update-quota-tally UPDATE "bytes_in_used = bytes_in_used + %{0}, bytes_out_used = bytes_out_used + %{1}, bytes_xfer_used = bytes_xfer_used + %{2}, files_in_used = files_in_used + %{3}, files_out_used = files_out_used + %{4}, files_xfer_used = files_xfer_used + %{5} WHERE name = '%{6}' AND quota_type = '%{7}'" proftpd_quota_tallies
+SQLNamedQuery insert-quota-tally INSERT "%{0}, %{1}, %{2}, %{3}, %{4}, %{5}, %{6}, %{7}" proftpd_quota_tallies
+```
+
+Notes:
+- The app grants the `proftpd` role SELECT on `proftpd_quota_limits` and
+  SELECT/INSERT/UPDATE/DELETE on `proftpd_quota_tallies` at every startup
+  (same re-grant mechanism as the other views).
+- A plan upgrade changes the limit instantly — it's a view over
+  `account_controls`, nothing to sync.
+- The portal shows usage straight from `proftpd_quota_tallies`
+  (`bytes_in_used` where `name = 'svc<id>'`).
+- When the limit is hit the client sees "Quota exceeded" and the upload is
+  refused; `QuotaShowQuotas on` lets `sftp> quote SITE QUOTA` display usage.
+- Services on plans with `max_storage_mb` NULL have no limit row = unlimited.
+
+Verify after restart:
+
+```bash
+sudo proftpd -t                       # config parses
+psql -U proftpd -d sftpmanager \
+  -c "SELECT * FROM proftpd_quota_limits LIMIT 3"
+# upload past the limit on a trial account -> expect "552 Quota exceeded"
+```

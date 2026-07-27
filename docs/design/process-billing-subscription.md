@@ -3,6 +3,11 @@
 See `DOCUMENTATION.md` §3.3 for the element list. Three independent
 entry points feed the same `chargeUser()` guardrail path in `BillingService`.
 
+![Diagram](images/process-billing-subscription.svg)
+
+<details>
+<summary>Mermaid source (click to expand — editable at mermaid.live)</summary>
+
 ```mermaid
 flowchart TD
     subgraph FIRST["First charge (onboarding / card added while unpaid)"]
@@ -49,6 +54,8 @@ flowchart TD
         C6["'Mark paid +1 month' button"] --> C7["$0 payment record<br/>paidToDate += 1 month<br/>NO card charged"]
     end
 ```
+
+</details>
 
 **Key points**
 - The guardrails (`billing.enabled`, `allow-live-charges`, per-charge cap,

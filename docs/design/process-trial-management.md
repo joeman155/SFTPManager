@@ -2,6 +2,11 @@
 
 See `DOCUMENTATION.md` §3.2 for the element list.
 
+![Diagram](images/process-trial-management.svg)
+
+<details>
+<summary>Mermaid source (click to expand — editable at mermaid.live)</summary>
+
 ```mermaid
 flowchart TD
     A[User has trialExpires set<br/>real trial plan OR grace period] --> B["TrialExpiryScheduler<br/>runs every hour"]
@@ -23,6 +28,8 @@ flowchart TD
     K -->|No| D
     L --> M[trialExpires cleared, paidToDate set]
 ```
+
+</details>
 
 **Key points**
 - One scheduler, two distinct origins of `trialExpires`: a genuine free

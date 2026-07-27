@@ -3,6 +3,11 @@
 See `DOCUMENTATION.md` §3.5 for the element list. Three independent boolean
 flags on `User`, each with its own trigger and its own reversal path.
 
+![Diagram](images/process-account-lifecycle.svg)
+
+<details>
+<summary>Mermaid source (click to expand — editable at mermaid.live)</summary>
+
 ```mermaid
 flowchart TD
     subgraph LOCKED["locked"]
@@ -30,6 +35,8 @@ flowchart TD
     E -->|Yes| F["Refused —<br/>support-contact message shown<br/>session invalidated if mid-session"]
     E -->|No| G[Allowed to proceed]
 ```
+
+</details>
 
 **Key points**
 - `locked` and `accountClosed` both **block login entirely**;

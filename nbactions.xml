@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<actions>
+        <action>
+            <actionName>run</actionName>
+            <packagings>
+                <packaging>war</packaging>
+                <packaging>ear</packaging>
+                <packaging>ejb</packaging>
+            </packagings>
+            <goals>
+                <goal>package</goal>
+            </goals>
+            <properties>
+                <netbeans.deploy>true</netbeans.deploy>
+                <Env.DB_HOST>localhost</Env.DB_HOST>
+                <Env.DB_PORT>5432</Env.DB_PORT>
+                <Env.DB_NAME>sftpmanager</Env.DB_NAME>
+                <Env.DB_USER>sftpmanager</Env.DB_USER>
+                <Env.DB_PASSWORD>Fred12345_</Env.DB_PASSWORD>
+                <Env.GOOGLE_PORTAL_CLIENT_ID>814158618541-c7scpk06uaj70nebnhknufv04i7an09j.apps.googleusercontent.com</Env.GOOGLE_PORTAL_CLIENT_ID>
+                <Env.GOOGLE_PORTAL_CLIENT_SECRET>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</Env.GOOGLE_PORTAL_CLIENT_SECRET>
+                <Env.GOOGLE_ADMIN_CLIENT_ID>814158618541-c7scpk06uaj70nebnhknufv04i7an09j.apps.googleusercontent.com</Env.GOOGLE_ADMIN_CLIENT_ID>
+                <Env.GOOGLE_ADMIN_CLIENT_SECRET>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</Env.GOOGLE_ADMIN_CLIENT_SECRET>
+                <Env.GMAIL_USERNAME>joeman1556@gmail.com</Env.GMAIL_USERNAME>
+                <Env.GMAIL_APP_PASSWORD>"swur xoea xyrx krvx"</Env.GMAIL_APP_PASSWORD>
+            </properties>
+        </action>
+        <action>
+            <actionName>run.single.main</actionName>
+            <packagings>
+                <packaging>*</packaging>
+            </packagings>
+            <goals>
+                <goal>process-classes</goal>
+                <goal>org.codehaus.mojo:exec-maven-plugin:3.5.1:exec</goal>
+            </goals>
+            <properties>
+                <exec.vmArgs></exec.vmArgs>
+                <exec.args>${exec.vmArgs} -classpath %classpath ${exec.mainClass} ${exec.appArgs}</exec.args>
+                <exec.executable>java</exec.executable>
+                <exec.mainClass>${packageClassName}</exec.mainClass>
+                <exec.classpathScope>${classPathScope}</exec.classpathScope>
+                <Env.DB_HOST>localhost</Env.DB_HOST>
+                <Env.DB_PORT>5432</Env.DB_PORT>
+                <Env.DB_NAME>sftpmanager</Env.DB_NAME>
+                <Env.DB_USER>sftpmanager</Env.DB_USER>
+                <Env.DB_PASSWORD>Fred12345_</Env.DB_PASSWORD>
+                <Env.GOOGLE_PORTAL_CLIENT_ID>814158618541-c7scpk06uaj70nebnhknufv04i7an09j.apps.googleusercontent.com</Env.GOOGLE_PORTAL_CLIENT_ID>
+                <Env.GOOGLE_PORTAL_CLIENT_SECRET>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</Env.GOOGLE_PORTAL_CLIENT_SECRET>
+                <Env.GOOGLE_ADMIN_CLIENT_ID>814158618541-c7scpk06uaj70nebnhknufv04i7an09j.apps.googleusercontent.com</Env.GOOGLE_ADMIN_CLIENT_ID>
+                <Env.GOOGLE_ADMIN_CLIENT_SECRET>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</Env.GOOGLE_ADMIN_CLIENT_SECRET>
+                <Env.GMAIL_USERNAME>joeman1556@gmail.com</Env.GMAIL_USERNAME>
+                <Env.GMAIL_APP_PASSWORD>"swur xoea xyrx krvx"</Env.GMAIL_APP_PASSWORD>
+            </properties>
+        </action>
+        <action>
+            <actionName>CUSTOM-RUN</actionName>
+            <displayName>RUN</displayName>
+            <goals>
+                <goal>org.springframework.boot:spring-boot-maven-plugin:3.2.0:start</goal>
+            </goals>
+            <properties>
+                <Env.DB_HOST>localhost</Env.DB_HOST>
+                <Env.DB_PORT>5432</Env.DB_PORT>
+                <Env.DB_NAME>sftpmanager</Env.DB_NAME>
+                <Env.DB_USER>sftpmanager</Env.DB_USER>
+                <Env.DB_PASSWORD>Fred12345_</Env.DB_PASSWORD>
+                <Env.GOOGLE_PORTAL_CLIENT_ID>814158618541-c7scpk06uaj70nebnhknufv04i7an09j.apps.googleusercontent.com</Env.GOOGLE_PORTAL_CLIENT_ID>
+                <Env.GOOGLE_PORTAL_CLIENT_SECRET>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</Env.GOOGLE_PORTAL_CLIENT_SECRET>
+                <Env.GOOGLE_ADMIN_CLIENT_ID>814158618541-c7scpk06uaj70nebnhknufv04i7an09j.apps.googleusercontent.com</Env.GOOGLE_ADMIN_CLIENT_ID>
+                <Env.GOOGLE_ADMIN_CLIENT_SECRET>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</Env.GOOGLE_ADMIN_CLIENT_SECRET>
+                <Env.GMAIL_USERNAME>joeman1556@gmail.com</Env.GMAIL_USERNAME>
+                <Env.GMAIL_APP_PASSWORD>swur xoea xyrx krvx</Env.GMAIL_APP_PASSWORD>
+            </properties>
+        </action>
+    </actions>

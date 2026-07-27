@@ -4,6 +4,11 @@ See `DOCUMENTATION.md` §3.4 for the element list. Same decision logic
 (`BillingService.switchPaidPlan`) runs whether the change is initiated from
 the portal's Change Plan modal or the admin's Account Controls dropdown.
 
+![Diagram](images/process-plan-changes.svg)
+
+<details>
+<summary>Mermaid source (click to expand — editable at mermaid.live)</summary>
+
 ```mermaid
 flowchart TD
     A[User or Admin selects a different plan] --> B{Same plan as current?}
@@ -30,6 +35,8 @@ flowchart TD
     Q --> R["Email to support@leederville.net:<br/>name, current plan, requested plan, message"]
     R --> S["Nothing changes automatically —<br/>a human actions it within 1 business day"]
 ```
+
+</details>
 
 **Key points**
 - "Same plan" is blocked at both the UI (card greyed out, no click handler)

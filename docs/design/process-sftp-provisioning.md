@@ -2,6 +2,11 @@
 
 See `DOCUMENTATION.md` §3.6 and `PROFTPD-SETUP.md` for full server setup.
 
+![Diagram](images/process-sftp-provisioning.svg)
+
+<details>
+<summary>Mermaid source (click to expand — editable at mermaid.live)</summary>
+
 ```mermaid
 flowchart TD
     A["Portal or Admin: create/edit Service Account"] --> B["Enter username, auth type,<br/>password or public key, permissions"]
@@ -32,6 +37,8 @@ flowchart TD
     V --> W[mod_sql group lookup against proftpd_groups]
     W --> X["&lt;Limit&gt; blocks enforce READ/WRITE/DELETE<br/>per operation — filesystem stays uniform uid/gid,<br/>permissions enforced at the protocol layer"]
 ```
+
+</details>
 
 **Key points**
 - Every admin kill-switch (lock, deactivate, close) applies to **real SFTP

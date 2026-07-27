@@ -2,9 +2,24 @@
 
 Companion to `../../DOCUMENTATION.md` (pages, forms, field lists). This
 folder holds the visual diagrams: one data model, one diagram per business
-process. All diagrams are [Mermaid](https://mermaid.js.org/) — they render
-natively on GitHub/GitLab and in most IDEs (VS Code: "Markdown Preview
-Mermaid Support" extension).
+process.
+
+Each diagram is available two ways in its `.md` file:
+- **A static SVG** (`images/*.svg`), rendered ahead of time — vector, so it
+  stays crisp at any zoom level (unlike a raster PNG). Displays everywhere:
+  GitHub, plain Markdown viewers, Word/PDF export, no plugin needed.
+- **The [Mermaid](https://mermaid.js.org/) source**, in a collapsed
+  `<details>` block underneath — edit it and paste into
+  [mermaid.live](https://mermaid.live) to tweak and re-export, or let it
+  render live in tools that support Mermaid natively (GitHub, GitLab, VS
+  Code with the "Markdown Preview Mermaid Support" extension).
+
+To regenerate an SVG after editing its source, base64-encode the Mermaid
+block and fetch it from the free rendering service:
+```bash
+B64=$(base64 -w0 diagram.mmd | tr '+/' '-_' | tr -d '=')
+curl -s "https://mermaid.ink/svg/${B64}?backgroundColor=white" -o images/diagram.svg
+```
 
 ## Contents
 

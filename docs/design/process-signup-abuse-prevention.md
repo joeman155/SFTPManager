@@ -2,6 +2,11 @@
 
 See `DOCUMENTATION.md` §3.7 for the element list.
 
+![Diagram](images/process-signup-abuse-prevention.svg)
+
+<details>
+<summary>Mermaid source (click to expand — editable at mermaid.live)</summary>
+
 ```mermaid
 flowchart TD
     A["New account created<br/>(email/password OR first Google login)"] --> B["Capture request IP<br/>into User.signup_ip"]
@@ -20,6 +25,8 @@ flowchart TD
     G --> K
     K --> L["Admin can raise/lower the cap<br/>live via Runtime Settings — no restart"]
 ```
+
+</details>
 
 **Key points**
 - The block is on the **trial offer**, not on signup itself — nobody who
