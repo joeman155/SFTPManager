@@ -8,7 +8,7 @@ sleep 15
 
 
 # Once all pods show Terminating and disappear, scale back up
-kubectl scale deployment sftp-manager -n sftp-manager --replicas=2
+kubectl scale deployment sftp-manager -n sftp-manager --replicas=1
 
 
 sleep 15

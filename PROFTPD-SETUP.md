@@ -219,6 +219,40 @@ sudo ss -tlnp | grep proftpd
 sudo apt-get install proftpd-mod-wrap2 proftpd-mod-wrap2-sql
 ```
 
+For Debian, wrap2 does not exist, so needed to run: -
+bash
+# 1. Get the dev headers/build tooling
+apt-get install proftpd-dev build-essential
+
+
+apt-get source proftpd-dfsg
+cd proftpd-dfsg-1.3.8.c+dfsg/
+
+# 2. Configure, telling it to build wrap2 (+ sql submodule) as shared/DSO
+#    rather than statically linked
+./configure --enable-dso --with-shared=mod_wrap2:mod_wrap2_sql
+
+# 3. Build — this compiles the whole tree, but you only need the modules
+make
+
+# 4. Install just the modules, not the whole proftpd binary
+#    (proftpd's makefile supports installing modules only)
+make install-modules
+
+
+# 5. Load it in modules.conf
+echo "LoadModule mod_wrap2.c" >> /etc/proftpd/modules.conf
+echo "LoadModule mod_wrap2_sql.c" >> /etc/proftpd/modules.conf
+
+# 6. Sanity check, then restart
+proftpd -l   # confirm mod_dso is present
+proftpd -t   # test config
+systemctl restart proftpd
+
+
+
+
+
 Add inside the vhost:
 
 ```apacheconf
@@ -228,7 +262,7 @@ Add inside the vhost:
     # rows falls through to the deny query result (empty) = allowed.
     WrapUserTables    %U sql:/get-user-allow sql:/get-user-deny
     SQLNamedQuery     get-user-allow SELECT "allowed FROM proftpd_allowed_ips WHERE name = '%U'"
-    SQLNamedQuery     get-user-deny  SELECT "1 WHERE false"
+    SQLNamedQuery     get-user-deny  SELECT "'ALL' FROM proftpd_allowed_ips WHERE name = '%u' LIMIT 1"
     WrapLog           /var/log/proftpd/wrap2.log
 </IfModule>
 ```

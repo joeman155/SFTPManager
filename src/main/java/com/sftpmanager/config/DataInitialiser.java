@@ -32,11 +32,11 @@ public class DataInitialiser implements CommandLineRunner {
         if (accountControlsRepository.count() == 0) {
             AccountControls trial = new AccountControls();
             trial.setPlan("7 Day Trial");
-            trial.setDescription("Try SFTP Manager free for 7 days. 1 SFTP service. 10GB storage. Email support. No credit card required.");
+            trial.setDescription("Try SFTP Manager free for 7 days. 1 SFTP service. 100MB storage. Email support. No credit card required.");
             trial.setMonthlyPriceCents(null); // free — never billed
             trial.setMaxUsers(5);
             trial.setMaxServers(1);
-            trial.setMaxStorageMb(10240L); // 10GB, as the description promises
+            trial.setMaxStorageMb(100L); // 100MB, as the description promises
             trial.setTrialDays(7);
             trial.setCreatedBy("system");
             trial.setLastUpdatedBy("system");
@@ -55,9 +55,9 @@ public class DataInitialiser implements CommandLineRunner {
 
             AccountControls enterprise = new AccountControls();
             enterprise.setPlan("Enterprise");
-            enterprise.setDescription("Unlimited SFTP services. 1TB storage. Priority 24/7 support. Advanced security features. Ideal for growing businesses.");
+            enterprise.setDescription("Unlimited SFTP services. 1GB storage. Priority 24/7 support. Advanced security features. Ideal for growing businesses.");
             enterprise.setMonthlyPriceCents(9900L);
-            enterprise.setMaxStorageMb(1048576L); // 1TB
+            enterprise.setMaxStorageMb(1024L); // 1GB
             enterprise.setCreatedBy("system");
             enterprise.setLastUpdatedBy("system");
             accountControlsRepository.save(enterprise);
