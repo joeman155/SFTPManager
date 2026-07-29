@@ -661,7 +661,7 @@ async function loadWhitelist() {
     if (!rows.length) { empty('whitelist-tbody', 3); return; }
     tbody.innerHTML = rows.map(r => `<tr>
         <td><code>${r.ipAddress||''}</code></td>
-        <td><span class="${r.enabled?'badge-on':'badge-off'}">${r.enabled?'Allowed':'Blocked'}</span></td>
+        <td><span class="${r.enabled?'badge-on':'badge-off'}">${r.enabled?'Enabled':'Disabled'}</span></td>
         ${actionBtns(`editWhitelist(${r.id})`,`deleteWhitelist(${r.id})`)}
     </tr>`).join('');
 }
@@ -1122,7 +1122,7 @@ function openWhitelistForm(data={}) {
                 <div class="field-error" id="wlIp-err"></div>
             </div>
             <div class="col-12 mb-3">
-                <div class="form-check">
+                <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="wlEnabled" checked>
                     <label class="form-check-label small">Enabled</label>
                 </div>

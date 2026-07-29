@@ -837,7 +837,7 @@ function renderWhitelistModal(svcName, rows) {
         <tbody>${rows.map(r => `
         <tr>
             <td data-label="IP Address"><code>${r.ipAddress}</code></td>
-            <td data-label="Status"><span class="${r.enabled?'badge-on':'badge-off'}">${r.enabled?'Allowed':'Blocked'}</span></td>
+            <td data-label="Status"><span class="${r.enabled?'badge-on':'badge-off'}">${r.enabled?'Enabled':'Disabled'}</span></td>
             <td><div class="btn-row-actions">
                 <button class="btn btn-sm btn-outline-secondary" onclick="editIp(${r.id})"><i class="bi bi-pencil"></i></button>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteIp(${r.id})"><i class="bi bi-trash"></i></button>
@@ -860,7 +860,7 @@ function openIpForm(data={}) {
     editingIpId = data.id || null;
     openSubModal((editingIpId?'Edit':'New')+' IP Rule', `
         ${fld('IP Address / CIDR','ipAddr','text','e.g. 192.168.1.0/24 or 10.0.0.1',true)}
-        <div class="form-check mb-3">
+        <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="ipEnabled" checked>
             <label class="form-check-label small">Enabled</label>
         </div>
