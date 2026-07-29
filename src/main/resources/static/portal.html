@@ -1307,7 +1307,7 @@ function toggleChangePw(show) {
     document.getElementById('change-pw-form').style.display = show ? 'block' : 'none';
     if (!show) {
         ['cp-current','cp-new','cp-confirm'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-        ['cp-current-err','cp-new-err','cp-confirm-err'].forEach(id => showErr(id, null));
+        ['cp-current','cp-new','cp-confirm'].forEach(id => showErr(id, null));
         document.getElementById('cp-success').style.display = 'none';
     }
 }
@@ -1318,14 +1318,14 @@ async function submitChangePw() {
     const confirm = document.getElementById('cp-confirm').value;
     let valid = true;
 
-    if (!current) { showErr('cp-current-err', 'Current password is required'); valid = false; }
-    else showErr('cp-current-err', null);
+    if (!current) { showErr('cp-current', 'Current password is required'); valid = false; }
+    else showErr('cp-current', null);
 
-    if (!nw || nw.length < 8) { showErr('cp-new-err', 'New password must be at least 8 characters'); valid = false; }
-    else showErr('cp-new-err', null);
+    if (!nw || nw.length < 8) { showErr('cp-new', 'New password must be at least 8 characters'); valid = false; }
+    else showErr('cp-new', null);
 
-    if (nw !== confirm) { showErr('cp-confirm-err', 'Passwords do not match'); valid = false; }
-    else showErr('cp-confirm-err', null);
+    if (nw !== confirm) { showErr('cp-confirm', 'Passwords do not match'); valid = false; }
+    else showErr('cp-confirm', null);
 
     if (!valid) return;
 
@@ -1341,7 +1341,7 @@ async function submitChangePw() {
         ['cp-current','cp-new','cp-confirm'].forEach(id => document.getElementById(id).value = '');
         setTimeout(() => toggleChangePw(false), 2000);
     } else {
-        showErr('cp-current-err', data.error || 'Password change failed');
+        showErr('cp-current', data.error || 'Password change failed');
     }
 }
 
