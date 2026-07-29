@@ -1,5 +1,6 @@
 package com.sftpmanager.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
@@ -85,6 +86,7 @@ public class User {
     @Column(name = "auth_type")
     private String authType = "GOOGLE";
 
+    @JsonIgnore
     @Column(name = "password_hash")
     private String passwordHash;
 

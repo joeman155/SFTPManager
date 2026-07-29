@@ -864,6 +864,20 @@ function openUserForm(data={}) {
                 <div><strong>Backup:</strong> ${cardText(data.backupCcBrand, data.backupCcLast4, data.backupCcExpiry)}</div>
             </div>
         </div>
+        ${editingId && data.authType === 'EMAIL' ? `
+        <div class="section-header mb-3 mt-1">Reset Password <span class="text-muted small fw-normal">(this account signs in with email/password)</span></div>
+        <div class="row align-items-end">
+            <div class="col-md-6 mb-3">
+                <label class="form-label small fw-semibold">New Password</label>
+                <input class="form-control form-control-sm" type="password" id="resetPassword" placeholder="Min 8 characters">
+                <div class="field-error" id="resetPassword-err"></div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <button type="button" class="btn btn-outline-warning btn-sm" onclick="resetUserPassword(${data.id})">
+                    <i class="bi bi-key me-1"></i>Set New Password
+                </button>
+            </div>
+        </div>` : ''}
         ${footerBtns('saveUser')}
     `);
     if (data.id) {
@@ -904,9 +918,28 @@ async function editUser(id) {
     openUserForm(data);
 }
 async function deleteUser(id) {
-    if (!confirm('Delete this user? Their SFTP services will also be removed.')) return;
-    await fetch(`${API}/users/${id}`, {method:'DELETE'});
-    loadUsers();
+    if (!confirm('Delete this user? Their SFTP services (and all accounts/IP rules on them) will also be removed. This cannot be undone.')) return;
+    const r = await fetch(`${API}/users/${id}`, {method:'DELETE'});
+    if (r.ok) { loadUsers(); }
+    else {
+        const err = await r.json().catch(()=>({}));
+        alert(err.error || 'Failed to delete user');
+    }
+}
+
+async function resetUserPassword(id) {
+    const pwd = document.getElementById('resetPassword').value;
+    const err = document.getElementById('resetPassword-err');
+    err.textContent = '';
+    if (!pwd || pwd.length < 8) { err.textContent = 'Password must be at least 8 characters'; return; }
+    if (!confirm('Set a new password for this user? They will need to use it next time they sign in.')) return;
+    const r = await fetch(`${API}/users/${id}/reset-password`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ password: pwd })
+    });
+    const data = await r.json().catch(()=>({}));
+    if (r.ok) { alert('Password updated'); document.getElementById('resetPassword').value = ''; }
+    else { err.textContent = data.error || 'Failed to update password'; }
 }
 
 // ── SFTP Service form ──
@@ -959,8 +992,12 @@ async function editSftp(id) {
 }
 async function deleteSftp(id) {
     if (!confirm('Delete this SFTP service? All associated accounts and IP rules will be removed.')) return;
-    await fetch(`${API}/sftpservices/${id}`, {method:'DELETE'});
-    loadSftpServices();
+    const r = await fetch(`${API}/sftpservices/${id}`, {method:'DELETE'});
+    if (r.ok) { loadSftpServices(); }
+    else {
+        const err = await r.json().catch(()=>({}));
+        alert(err.error || 'Failed to delete SFTP service');
+    }
 }
 
 // ── Service Account form ──

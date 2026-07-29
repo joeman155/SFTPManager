@@ -4,6 +4,8 @@ import com.sftpmanager.model.RuntimeSettings;
 import com.sftpmanager.model.SftpService;
 import com.sftpmanager.model.User;
 import com.sftpmanager.repository.RuntimeSettingsRepository;
+import com.sftpmanager.repository.SftpServiceAccountRepository;
+import com.sftpmanager.repository.SftpServiceIpWhitelistRepository;
 import com.sftpmanager.repository.SftpServiceRepository;
 import com.sftpmanager.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collections;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,12 +29,15 @@ class SftpServiceServiceTest {
     @Mock private SftpServiceRepository sftpServiceRepository;
     @Mock private UserRepository userRepository;
     @Mock private RuntimeSettingsRepository runtimeSettingsRepository;
+    @Mock private SftpServiceAccountRepository sftpServiceAccountRepository;
+    @Mock private SftpServiceIpWhitelistRepository sftpServiceIpWhitelistRepository;
 
     private SftpServiceService service;
 
     @BeforeEach
     void setUp() {
-        service = new SftpServiceService(sftpServiceRepository, userRepository, runtimeSettingsRepository);
+        service = new SftpServiceService(sftpServiceRepository, userRepository, runtimeSettingsRepository,
+                sftpServiceAccountRepository, sftpServiceIpWhitelistRepository);
     }
 
     @Test
@@ -98,7 +104,25 @@ class SftpServiceServiceTest {
 
     @Test
     void deleteDelegatesToRepository() {
+        when(sftpServiceAccountRepository.findBySftpServiceId(4L)).thenReturn(Collections.emptyList());
+        when(sftpServiceIpWhitelistRepository.findBySftpServiceId(4L)).thenReturn(Collections.emptyList());
+
         service.deleteById(4L);
+
+        verify(sftpServiceRepository).deleteById(4L);
+    }
+
+    @Test
+    void deleteCascadesAccountsAndWhitelistFirst() {
+        com.sftpmanager.model.SftpServiceAccount account = new com.sftpmanager.model.SftpServiceAccount();
+        com.sftpmanager.model.SftpServiceIpWhitelist rule = new com.sftpmanager.model.SftpServiceIpWhitelist();
+        when(sftpServiceAccountRepository.findBySftpServiceId(4L)).thenReturn(java.util.List.of(account));
+        when(sftpServiceIpWhitelistRepository.findBySftpServiceId(4L)).thenReturn(java.util.List.of(rule));
+
+        service.deleteById(4L);
+
+        verify(sftpServiceAccountRepository).deleteAll(java.util.List.of(account));
+        verify(sftpServiceIpWhitelistRepository).deleteAll(java.util.List.of(rule));
         verify(sftpServiceRepository).deleteById(4L);
     }
 }

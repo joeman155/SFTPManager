@@ -3,6 +3,8 @@ package com.sftpmanager.service;
 import com.sftpmanager.model.SftpService;
 import com.sftpmanager.model.User;
 import com.sftpmanager.repository.RuntimeSettingsRepository;
+import com.sftpmanager.repository.SftpServiceAccountRepository;
+import com.sftpmanager.repository.SftpServiceIpWhitelistRepository;
 import com.sftpmanager.repository.SftpServiceRepository;
 import com.sftpmanager.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -17,12 +19,18 @@ public class SftpServiceService {
     private final SftpServiceRepository sftpServiceRepository;
     private final UserRepository userRepository;
     private final RuntimeSettingsRepository runtimeSettingsRepository;
+    private final SftpServiceAccountRepository sftpServiceAccountRepository;
+    private final SftpServiceIpWhitelistRepository sftpServiceIpWhitelistRepository;
 
     public SftpServiceService(SftpServiceRepository sftpServiceRepository, UserRepository userRepository,
-                               RuntimeSettingsRepository runtimeSettingsRepository) {
+                               RuntimeSettingsRepository runtimeSettingsRepository,
+                               SftpServiceAccountRepository sftpServiceAccountRepository,
+                               SftpServiceIpWhitelistRepository sftpServiceIpWhitelistRepository) {
         this.sftpServiceRepository = sftpServiceRepository;
         this.userRepository = userRepository;
         this.runtimeSettingsRepository = runtimeSettingsRepository;
+        this.sftpServiceAccountRepository = sftpServiceAccountRepository;
+        this.sftpServiceIpWhitelistRepository = sftpServiceIpWhitelistRepository;
     }
 
     public List<SftpService> findAll() { return sftpServiceRepository.findAll(); }
@@ -53,5 +61,10 @@ public class SftpServiceService {
         }).orElseThrow(() -> new RuntimeException("SftpService not found: " + id));
     }
 
-    public void deleteById(Long id) { sftpServiceRepository.deleteById(id); }
+    /** Accounts and whitelist rules have a non-nullable FK to their service, so they must go first. */
+    public void deleteById(Long id) {
+        sftpServiceAccountRepository.deleteAll(sftpServiceAccountRepository.findBySftpServiceId(id));
+        sftpServiceIpWhitelistRepository.deleteAll(sftpServiceIpWhitelistRepository.findBySftpServiceId(id));
+        sftpServiceRepository.deleteById(id);
+    }
 }

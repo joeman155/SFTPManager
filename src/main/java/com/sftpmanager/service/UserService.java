@@ -3,7 +3,11 @@ package com.sftpmanager.service;
 import com.sftpmanager.model.AccountControls;
 import com.sftpmanager.model.User;
 import com.sftpmanager.repository.AccountControlsRepository;
+import com.sftpmanager.repository.PaymentRepository;
+import com.sftpmanager.repository.PortalUserRepository;
+import com.sftpmanager.repository.SftpServiceRepository;
 import com.sftpmanager.repository.UserRepository;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
@@ -17,12 +21,23 @@ public class UserService {
     private final UserRepository userRepository;
     private final AccountControlsRepository accountControlsRepository;
     private final BillingService billingService;
+    private final SftpServiceRepository sftpServiceRepository;
+    private final SftpServiceService sftpServiceService;
+    private final PaymentRepository paymentRepository;
+    private final PortalUserRepository portalUserRepository;
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public UserService(UserRepository userRepository, AccountControlsRepository accountControlsRepository,
-                       BillingService billingService) {
+                       BillingService billingService, SftpServiceRepository sftpServiceRepository,
+                       SftpServiceService sftpServiceService, PaymentRepository paymentRepository,
+                       PortalUserRepository portalUserRepository) {
         this.userRepository = userRepository;
         this.accountControlsRepository = accountControlsRepository;
         this.billingService = billingService;
+        this.sftpServiceRepository = sftpServiceRepository;
+        this.sftpServiceService = sftpServiceService;
+        this.paymentRepository = paymentRepository;
+        this.portalUserRepository = portalUserRepository;
     }
 
     public List<User> findAll() { return userRepository.findAll(); }
@@ -129,5 +144,21 @@ public class UserService {
         billingService.switchPaidPlan(existing, newPlan, "ADMIN:" + adminEmail, true);
     }
 
-    public void deleteById(Long id) { userRepository.deleteById(id); }
+    /**
+     * Services (and their accounts/whitelist rows), payments, and the Google-portal
+     * link all carry a FK back to this user, so they must be cleared first or the
+     * delete fails silently on a DB constraint violation.
+     */
+    public void deleteById(Long id) {
+        sftpServiceRepository.findByUserId(id).forEach(svc -> sftpServiceService.deleteById(svc.getId()));
+        paymentRepository.deleteAll(paymentRepository.findByUserIdOrderByCreatedAtDesc(id));
+        portalUserRepository.findByUserId(id).ifPresent(portalUserRepository::delete);
+        userRepository.deleteById(id);
+    }
+
+    public void resetPassword(User user, String newPassword) {
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setLastUpdatedBy("admin-reset");
+        userRepository.save(user);
+    }
 }

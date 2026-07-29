@@ -3,6 +3,9 @@ package com.sftpmanager.service;
 import com.sftpmanager.model.AccountControls;
 import com.sftpmanager.model.User;
 import com.sftpmanager.repository.AccountControlsRepository;
+import com.sftpmanager.repository.PaymentRepository;
+import com.sftpmanager.repository.PortalUserRepository;
+import com.sftpmanager.repository.SftpServiceRepository;
 import com.sftpmanager.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,12 +32,17 @@ class UserServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private AccountControlsRepository accountControlsRepository;
     @Mock private BillingService billingService;
+    @Mock private SftpServiceRepository sftpServiceRepository;
+    @Mock private SftpServiceService sftpServiceService;
+    @Mock private PaymentRepository paymentRepository;
+    @Mock private PortalUserRepository portalUserRepository;
 
     private UserService service;
 
     @BeforeEach
     void setUp() {
-        service = new UserService(userRepository, accountControlsRepository, billingService);
+        service = new UserService(userRepository, accountControlsRepository, billingService,
+                sftpServiceRepository, sftpServiceService, paymentRepository, portalUserRepository);
     }
 
     private User existingUser() {
@@ -212,8 +221,35 @@ class UserServiceTest {
 
     @Test
     void deleteDelegatesToRepository() {
+        when(sftpServiceRepository.findByUserId(7L)).thenReturn(Collections.emptyList());
+        when(paymentRepository.findByUserIdOrderByCreatedAtDesc(7L)).thenReturn(Collections.emptyList());
+        when(portalUserRepository.findByUserId(7L)).thenReturn(Optional.empty());
+
         service.deleteById(7L);
+
         verify(userRepository).deleteById(7L);
         verify(userRepository, never()).deleteAll();
+    }
+
+    @Test
+    void deleteCascadesOwnedServicesPaymentsAndPortalLink() {
+        com.sftpmanager.model.SftpService svc1 = new com.sftpmanager.model.SftpService();
+        svc1.setId(11L);
+        com.sftpmanager.model.SftpService svc2 = new com.sftpmanager.model.SftpService();
+        svc2.setId(12L);
+        com.sftpmanager.model.Payment payment = new com.sftpmanager.model.Payment();
+        com.sftpmanager.model.PortalUser portalUser = new com.sftpmanager.model.PortalUser();
+
+        when(sftpServiceRepository.findByUserId(7L)).thenReturn(java.util.List.of(svc1, svc2));
+        when(paymentRepository.findByUserIdOrderByCreatedAtDesc(7L)).thenReturn(java.util.List.of(payment));
+        when(portalUserRepository.findByUserId(7L)).thenReturn(Optional.of(portalUser));
+
+        service.deleteById(7L);
+
+        verify(sftpServiceService).deleteById(11L);
+        verify(sftpServiceService).deleteById(12L);
+        verify(paymentRepository).deleteAll(java.util.List.of(payment));
+        verify(portalUserRepository).delete(portalUser);
+        verify(userRepository).deleteById(7L);
     }
 }
