@@ -83,6 +83,27 @@ public class EmailService {
         sendHtml(toEmail, "Reset your SFTP Manager password", html);
     }
 
+    /** Sent when an admin creates a new account — no password is set yet, so this doubles as the invite. */
+    @Async
+    public void sendAccountInviteEmail(String toEmail, String firstName, String token) {
+        String link = baseUrl + "/portal/reset-password?token=" + token;
+        String html = """
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+                <h2 style="color:#1a1f36">Welcome to SFTP Manager</h2>
+                <p>Hi %s,</p>
+                <p>An account has been created for you. Click the button below to set your password and sign in.
+                This link expires in <strong>48 hours</strong>.</p>
+                <a href="%s" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0">
+                    Set Your Password
+                </a>
+                <p style="color:#6b7280;font-size:.85rem">If you weren't expecting this, contact %s.</p>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+            </div>
+            """.formatted(firstName, link, supportEmail);
+        sendHtml(toEmail, "Welcome to SFTP Manager — set your password", html);
+    }
+
     @Async
     public void sendTrialWarningEmail(String toEmail, String firstName) {
         String html = """

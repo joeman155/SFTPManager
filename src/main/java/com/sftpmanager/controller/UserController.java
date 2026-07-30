@@ -1,6 +1,9 @@
 package com.sftpmanager.controller;
 
+import com.sftpmanager.model.PasswordReset;
 import com.sftpmanager.model.User;
+import com.sftpmanager.repository.PasswordResetRepository;
+import com.sftpmanager.service.EmailService;
 import com.sftpmanager.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,9 +16,11 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/users")
@@ -23,9 +28,14 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final PasswordResetRepository passwordResetRepository;
+    private final EmailService emailService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, PasswordResetRepository passwordResetRepository,
+                          EmailService emailService) {
         this.userService = userService;
+        this.passwordResetRepository = passwordResetRepository;
+        this.emailService = emailService;
     }
 
     @GetMapping
@@ -40,6 +50,9 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // Admins only ever create email/password accounts here — Google accounts come from
+    // self-service Google sign-in, not this form — so authType is always forced to EMAIL
+    // regardless of what's in the request body.
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody User user,
                                     @RequestParam(required = false) Long accountControlsId) {
@@ -47,7 +60,26 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "Email already exists"));
         }
-        return ResponseEntity.status(HttpStatus.CREATED).body(userService.save(user, accountControlsId));
+        user.setAuthType("EMAIL");
+        User saved = userService.save(user, accountControlsId);
+        sendAccountInvite(saved);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    }
+
+    /**
+     * Admin-created accounts start with no password — instead of an admin
+     * typing one in, we email the new user a set-password link (same
+     * mechanism as self-service "forgot password", just a longer-lived
+     * token since this doubles as the account invite).
+     */
+    private void sendAccountInvite(User user) {
+        PasswordReset reset = new PasswordReset();
+        reset.setEmail(user.getEmail());
+        reset.setToken(UUID.randomUUID().toString());
+        reset.setUsed(false);
+        reset.setExpiresAt(LocalDateTime.now().plusHours(48));
+        passwordResetRepository.save(reset);
+        emailService.sendAccountInviteEmail(user.getEmail(), user.getFirstName(), reset.getToken());
     }
 
     @PutMapping("/{id}")

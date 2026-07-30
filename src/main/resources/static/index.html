@@ -850,6 +850,7 @@ function openUserForm(data={}) {
             ${fld('Email','email','email','jane@company.com',true)}
             ${fld('Phone','phone','tel','+61 400 000 000')}
             ${editingId ? `<div class="col-12 mb-3 small text-muted">Signup IP: <code>${data.signupIp||'not recorded'}</code></div>` : ''}
+            ${!editingId ? `<div class="col-12 mb-3 small text-muted"><i class="bi bi-envelope me-1"></i>This user signs in with email/password. We'll email them a link to set their password (valid 48 hours) — Google accounts are created via self-service Google sign-in, not here.</div>` : ''}
         </div>
         <div class="section-header mb-3 mt-1">Company</div>
         <div class="row">
@@ -917,8 +918,12 @@ async function saveUser() {
     const acId = getVal('accountControlsId');
     const acParam = acId && !isNaN(acId) && parseInt(acId) > 0 ? `?accountControlsId=${acId}` : '';
     const url = editingId ? `${API}/users/${editingId}${acParam}` : `${API}/users${acParam}`;
+    const wasNew = !editingId;
     const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-    if (r.ok) { closeModal(); loadUsers(); }
+    if (r.ok) {
+        closeModal(); loadUsers();
+        if (wasNew) alert('User created. A password setup email has been sent to ' + body.email + '.');
+    }
     else {
         const err = await r.json();
         const msg = Object.entries(err).map(([k,v]) => `${k}: ${v}`).join('\n');

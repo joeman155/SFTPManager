@@ -435,6 +435,7 @@ let currentSvcId = null;
 // ── Validation ──
 const V = {
     required: v => v && v.trim() ? null : 'This field is required',
+    username: v => !v || /^[a-zA-Z0-9]+$/.test(v) ? null : 'Username must be alphanumeric with no spaces',
     ip: v => !v || /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\/([0-9]|[1-2][0-9]|3[0-2]))?$/.test(v) ? null : 'Invalid IP or CIDR (e.g. 192.168.1.0/24)',
     password: v => {
         if (!v) return null;
@@ -798,7 +799,7 @@ function updateStrength(pw) {
 
 async function saveSvcAccount() {
     const authType = getVal('acctAuth');
-    const rules = [['acctUser',V.required],['acctAuth',V.required]];
+    const rules = [['acctUser',V.required,V.username],['acctAuth',V.required]];
     // On edit, a blank password means "keep the current one"
     if (authType==='PASSWORD') rules.push(editingAcctId ? ['acctPw',V.password] : ['acctPw',V.required,V.password]);
     if (authType==='PUBLIC_KEY') rules.push(['acctPk',V.required,V.publicKey]);
