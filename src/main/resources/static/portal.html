@@ -1104,13 +1104,29 @@ async function resendCode(e) {
 }
 
 // ── Trial banner ──
+// "Xth of Month YYYY" — unambiguous for all users, including Americans (no MM/DD vs DD/MM confusion).
+const ORDINAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function ordinalSuffix(n) {
+    if (n % 10 === 1 && n % 100 !== 11) return 'st';
+    if (n % 10 === 2 && n % 100 !== 12) return 'nd';
+    if (n % 10 === 3 && n % 100 !== 13) return 'rd';
+    return 'th';
+}
+function formatOrdinalDate(v) {
+    if (!v) return '';
+    // Parse "YYYY-MM-DD" directly rather than via Date() to avoid UTC/local timezone day-shift.
+    const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return '';
+    const [, y, mo, day] = m.map(Number);
+    return `${day}${ordinalSuffix(day)} of ${ORDINAL_MONTHS[mo-1]} ${y}`;
+}
 function updateTrialBanner(trialExpires) {
     const banner = document.getElementById('trial-banner-top');
     if (!trialExpires) { banner.style.display = 'none'; return; }
     const days = Math.max(0, Math.ceil((new Date(trialExpires) - new Date()) / 86400000));
     const daysLabel = days === 0 ? 'today' : 'in ' + days + ' day' + (days === 1 ? '' : 's');
     document.getElementById('trial-banner-date').textContent =
-        new Date(trialExpires).toLocaleDateString() + ' (' + daysLabel + ')';
+        formatOrdinalDate(trialExpires) + ' (' + daysLabel + ')';
     banner.style.display = 'block';
 }
 
@@ -1278,7 +1294,7 @@ async function openAccount(e) {
     // Show trial banner if applicable
     if (user.trialExpires) {
         document.getElementById('trial-banner').style.display = 'block';
-        document.getElementById('trial-date').textContent = new Date(user.trialExpires).toLocaleDateString();
+        document.getElementById('trial-date').textContent = formatOrdinalDate(user.trialExpires);
     }
 
     // Show plan

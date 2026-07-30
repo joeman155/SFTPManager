@@ -200,15 +200,20 @@ function loadPage(page) {
     else if (page === 'settings') loadSettings();
 }
 
+// DD-MON-YYYY everywhere — unambiguous for all users regardless of locale (no US vs. rest-of-world mixups).
+const MONTH_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function fmt(d) {
     if (!d) return '-';
     // Spring Boot serializes LocalDateTime as [year,month,day,hour,min,sec,nano]
+    let y, m, day;
     if (Array.isArray(d)) {
-        const [y,m,day] = d;
-        return new Date(y, m-1, day).toLocaleDateString();
+        [y, m, day] = d;
+    } else {
+        const dt = new Date(d);
+        if (isNaN(dt.getTime())) return '-';
+        y = dt.getFullYear(); m = dt.getMonth() + 1; day = dt.getDate();
     }
-    const dt = new Date(d);
-    return isNaN(dt.getTime()) ? '-' : dt.toLocaleDateString();
+    return `${String(day).padStart(2,'0')}-${MONTH_ABBR[m-1]}-${y}`;
 }
 function empty(tbody, cols) {
     document.getElementById(tbody).innerHTML = `<tr><td colspan="${cols}" class="text-center text-muted py-4">No records found</td></tr>`;
@@ -218,15 +223,17 @@ function empty(tbody, cols) {
 // yields "Invalid Date" for some of these.
 function fmtDateTime(v) {
     if (!v) return '';
+    let y, mo, d, h = 0, mi = 0;
     if (Array.isArray(v)) {
-        const [y, mo, d, h = 0, mi = 0] = v;
-        return `${String(d).padStart(2,'0')}/${String(mo).padStart(2,'0')}/${y} ` +
-               `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;
+        [y, mo, d, h = 0, mi = 0] = v;
+    } else {
+        // Trim sub-millisecond fraction digits that some browsers reject
+        const cleaned = String(v).replace(/\.(\d{3})\d+/, '.$1');
+        const dt = new Date(cleaned);
+        if (isNaN(dt.getTime())) return String(v);
+        y = dt.getFullYear(); mo = dt.getMonth() + 1; d = dt.getDate(); h = dt.getHours(); mi = dt.getMinutes();
     }
-    // Trim sub-millisecond fraction digits that some browsers reject
-    const cleaned = String(v).replace(/\.(\d{3})\d+/, '.$1');
-    const d = new Date(cleaned);
-    return isNaN(d) ? String(v) : d.toLocaleString();
+    return `${String(d).padStart(2,'0')}-${MONTH_ABBR[mo-1]}-${y} ${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;
 }
 
 function cardText(brand, last4, expiry) {
