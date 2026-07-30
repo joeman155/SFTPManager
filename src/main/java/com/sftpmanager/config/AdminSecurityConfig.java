@@ -30,26 +30,27 @@ public class AdminSecurityConfig {
     public SecurityFilterChain adminFilterChain(HttpSecurity http) throws Exception {
         http
             .securityMatcher(
-                "/", "/index.html", "/api/**", "/admin/**",
+                "/admin", "/admin.html", "/api/**", "/admin/**",
                 "/admin-login.html", "/admin-denied.html",
                 "/oauth2/authorization/google-admin",
                 "/login/oauth2/code/google-admin"
             )
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/admin/login", "/admin/denied").permitAll()
                 .requestMatchers("/admin-login.html", "/admin-denied.html").permitAll()
                 .requestMatchers("/oauth2/authorization/google-admin", "/login/oauth2/code/google-admin").permitAll()
                 .requestMatchers("/healthz").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth -> oauth
-                .loginPage("/admin-login.html")
+                .loginPage("/admin/login")
                 .successHandler(adminSuccessHandler())
-                .failureUrl("/admin-login.html?error=true")
+                .failureUrl("/admin/login?error=true")
             )
             .logout(logout -> logout
                 .logoutRequestMatcher(new AntPathRequestMatcher("/admin/logout"))
-                .logoutSuccessUrl("/admin-login.html")
+                .logoutSuccessUrl("/admin/login")
                 .invalidateHttpSession(true)
                 .deleteCookies("JSESSIONID")
             );
@@ -66,12 +67,12 @@ public class AdminSecurityConfig {
                 .orElse(false);
 
             if (isAdmin) {
-                response.sendRedirect("/");
+                response.sendRedirect("/admin");
             } else {
                 SecurityContextHolder.clearContext();
                 HttpSession session = request.getSession(false);
                 if (session != null) session.invalidate();
-                response.sendRedirect("/admin-denied.html");
+                response.sendRedirect("/admin/denied");
             }
         };
     }

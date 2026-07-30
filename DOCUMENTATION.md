@@ -21,16 +21,27 @@ model ER diagram and a flowchart of every business process below, see
 
 ### 1.2 Admin Console
 
-| Page | File | Purpose |
-|---|---|---|
-| Admin Login | `admin-login.html` | Google sign-in only (no email/password) |
-| Access Denied | `admin-denied.html` | Shown when a non-admin Google account tries to sign in |
-| **Admin (main app)** | `index.html` | Single-page app: Users, SFTP Services, Service Accounts, IP Whitelist, Account Controls (plans), Runtime Settings, Billing |
+| Page | Route | File | Purpose |
+|---|---|---|---|
+| Admin Login | `/admin/login` | `admin-login.html` | Google sign-in only (no email/password) |
+| Access Denied | `/admin/denied` | `admin-denied.html` | Shown when a non-admin Google account tries to sign in |
+| **Admin (main app)** | `/admin` | `admin.html` | Single-page app: Users, SFTP Services, Service Accounts, IP Whitelist, Account Controls (plans), Runtime Settings, Billing |
+
+Routed via `AdminPageController` (forwards `/admin`, `/admin/login`, `/admin/denied`
+to their static files — same pattern as `PortalPageController`), gated by
+`AdminSecurityConfig`. `/` itself is now the public landing page (`index.html`,
+outside both the admin and portal security chains — see §1.3).
 
 Both main apps are client-rendered: one HTML file per app, sections toggled
 by JS (`page-*` divs in Admin; the whole `portal.html` for the Portal), all
 data fetched from REST APIs (`/api/**` for Admin, `/portal/api/**` for
 Portal).
+
+### 1.3 Public Landing Page
+
+| Page | Route | File | Purpose |
+|---|---|---|---|
+| Landing | `/` | `index.html` | Public marketing page — no auth, outside every security chain (falls through to `SecurityConfig`'s catch-all `permitAll`). Links to `/portal/login` for sign-up/sign-in. Intended as the destination for ad campaigns. |
 
 ---
 

@@ -21,7 +21,7 @@ public class AdminRoleFilter extends OncePerRequestFilter {
     private final UserRepository userRepository;
 
     private static final List<String> EXCLUDED = List.of(
-        "/admin-login.html", "/admin-denied.html", "/healthz",
+        "/admin/login", "/admin/denied", "/admin-login.html", "/admin-denied.html", "/healthz",
         "/portal", "/portal-login.html", "/portal.html",
         "/oauth2/", "/login/oauth2/"
     );
@@ -41,8 +41,8 @@ public class AdminRoleFilter extends OncePerRequestFilter {
         if (excluded) { chain.doFilter(request, response); return; }
 
         // Only check admin routes
-        boolean isAdminRoute = uri.equals("/") || uri.startsWith("/api/") ||
-                               uri.startsWith("/admin/") || uri.equals("/index.html");
+        boolean isAdminRoute = uri.equals("/admin") || uri.startsWith("/api/") ||
+                               uri.startsWith("/admin/") || uri.equals("/admin.html");
         if (!isAdminRoute) { chain.doFilter(request, response); return; }
 
         // Check OAuth2 principal directly - no session attribute needed
@@ -63,7 +63,7 @@ public class AdminRoleFilter extends OncePerRequestFilter {
             SecurityContextHolder.clearContext();
             HttpSession session = request.getSession(false);
             if (session != null) session.invalidate();
-            response.sendRedirect("/admin-denied.html");
+            response.sendRedirect("/admin/denied");
             return;
         }
 
