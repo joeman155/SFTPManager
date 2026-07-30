@@ -60,6 +60,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h4 class="mb-0">Users</h4>
             <div class="d-flex gap-2 align-items-center">
+                <input type="text" class="form-control form-control-sm" id="users-filter" placeholder="Search name, phone, email…" style="width:220px" oninput="onUsersFilterChange()">
                 <span class="small text-muted" id="billing-status-label"></span>
                 <button class="btn btn-outline-secondary btn-sm" onclick="runBillingNow()" title="Run the monthly billing pass now (honours dry-run setting)">
                     <i class="bi bi-cash-stack me-1"></i>Run billing
@@ -73,6 +74,7 @@
                 <tbody id="users-tbody"></tbody>
             </table>
         </div>
+        <div id="users-pagination" class="d-flex justify-content-between align-items-center mt-3 small text-muted"></div>
     </div>
 
     <!-- SFTP Services -->
@@ -168,6 +170,9 @@ let currentSftpServiceName = null;
 let currentUserId = null;
 let currentUserName = null;
 let allUsers = [];
+let usersFilterText = '';
+let usersPage = 1;
+const USERS_PAGE_SIZE = 10;
 let allControls = [];
 let allSftpServices = [];
 
@@ -552,9 +557,40 @@ async function loadUsers() {
     ]);
     allUsers = users;
     allControls = controls;
+    renderUsersTable();
+}
+
+function onUsersFilterChange() {
+    usersFilterText = getVal('users-filter').trim().toLowerCase();
+    usersPage = 1;
+    renderUsersTable();
+}
+
+function usersGoToPage(p) {
+    usersPage = p;
+    renderUsersTable();
+}
+
+function renderUsersTable() {
+    const q = usersFilterText;
+    const filtered = !q ? allUsers.slice() : allUsers.filter(u =>
+        [u.firstName, u.surname, u.phone, u.email].some(f => (f||'').toLowerCase().includes(q))
+    );
+    filtered.sort((a, b) => ((a.firstName||'')+' '+(a.surname||'')).trim().toLowerCase()
+        .localeCompare(((b.firstName||'')+' '+(b.surname||'')).trim().toLowerCase()));
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / USERS_PAGE_SIZE));
+    if (usersPage > totalPages) usersPage = totalPages;
+    const start = (usersPage - 1) * USERS_PAGE_SIZE;
+    const pageUsers = filtered.slice(start, start + USERS_PAGE_SIZE);
+
     const tbody = document.getElementById('users-tbody');
-    if (!users.length) { empty('users-tbody', 10); return; }
-    tbody.innerHTML = users.map(u => `<tr>
+    if (!pageUsers.length) {
+        empty('users-tbody', 10);
+        document.getElementById('users-pagination').innerHTML = '';
+        return;
+    }
+    tbody.innerHTML = pageUsers.map(u => `<tr>
         <td>${u.firstName||''} ${u.surname||''}</td>
         <td>${u.email||''}${u.signupIp ? `<div class="text-muted" style="font-size:.72rem" title="IP address captured at signup"><i class="bi bi-geo-alt me-1"></i>${u.signupIp}</div>` : ''}</td>
         <td>${u.company||''}</td>
@@ -592,6 +628,21 @@ async function loadUsers() {
             <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id})"><i class="bi bi-trash"></i></button>
         </td>
     </tr>`).join('');
+
+    renderUsersPagination(filtered.length, totalPages, start);
+}
+
+function renderUsersPagination(totalCount, totalPages, start) {
+    const el = document.getElementById('users-pagination');
+    const shownStart = start + 1;
+    const shownEnd = Math.min(start + USERS_PAGE_SIZE, totalCount);
+    el.innerHTML = `
+        <span>Showing ${shownStart}-${shownEnd} of ${totalCount}</span>
+        <div class="d-flex gap-1 align-items-center">
+            <button class="btn btn-sm btn-outline-secondary" ${usersPage<=1?'disabled':''} onclick="usersGoToPage(${usersPage-1})"><i class="bi bi-chevron-left"></i></button>
+            <span class="px-2">Page ${usersPage} of ${totalPages}</span>
+            <button class="btn btn-sm btn-outline-secondary" ${usersPage>=totalPages?'disabled':''} onclick="usersGoToPage(${usersPage+1})"><i class="bi bi-chevron-right"></i></button>
+        </div>`;
 }
 
 async function loadSftpServices() {
