@@ -21,6 +21,7 @@
         .table-card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); overflow:hidden; }
         .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1040; display:none; }
         .modal-box { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; z-index:1050; width:740px; max-width:96vw; max-height:92vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.18); display:none; }
+        .modal-box.modal-wide { width:925px; }
         .modal-box .mh { padding:15px 20px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:#fff; z-index:1; }
         .modal-box .mb { padding:20px; }
         .badge-on  { background:#d1fae5; color:#065f46; padding:2px 9px; border-radius:20px; font-size:.78rem; }
@@ -816,9 +817,10 @@ function pwStrength(pw) {
 }
 
 // ── Modal helpers ──
-function openModal(title, bodyHtml) {
+function openModal(title, bodyHtml, wide) {
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = bodyHtml;
+    document.getElementById('modal-box').classList.toggle('modal-wide', !!wide);
     document.getElementById('modal-overlay').style.display = 'block';
     document.getElementById('modal-box').style.display = 'block';
 }
@@ -1073,9 +1075,9 @@ function openAccountForm(data={}) {
         <div class="mb-3">
             <div class="section-header mb-2">Permissions</div>
             <div class="d-flex gap-3 ps-2">
-                <div class="form-check"><input class="form-check-input" type="checkbox" id="adminPermRead"><label class="form-check-label small">Read</label></div>
-                <div class="form-check"><input class="form-check-input" type="checkbox" id="adminPermWrite"><label class="form-check-label small">Write</label></div>
-                <div class="form-check"><input class="form-check-input" type="checkbox" id="adminPermDelete"><label class="form-check-label small">Delete</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="adminPermRead"><label class="form-check-label small" for="adminPermRead">Read</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="adminPermWrite"><label class="form-check-label small" for="adminPermWrite">Write</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="adminPermDelete"><label class="form-check-label small" for="adminPermDelete">Delete</label></div>
             </div>
         </div>
         <div class="form-check mb-3">
@@ -1083,7 +1085,7 @@ function openAccountForm(data={}) {
             <label class="form-check-label small">Enabled</label>
         </div>
         ${footerBtns('saveAccount')}
-    `);
+    `, true);
     if (data.id) {
         setVal('acctUsername', data.username);
         setVal('acctEmail', data.email);

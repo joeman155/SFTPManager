@@ -36,6 +36,8 @@
         .empty-state i { font-size:2.8rem; color:#d1d5db; margin-bottom:14px; }
         .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1040; display:none; }
         .modal-box { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:12px; z-index:1050; width:520px; max-width:95vw; box-shadow:0 8px 32px rgba(0,0,0,0.18); display:none; }
+        #sub-box { width:600px; }
+        #sub-box.modal-wide { width:750px; }
         .modal-box .mh { padding:16px 20px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; }
         .modal-box .mb { padding:20px; }
         .field-error { color:#dc2626; font-size:.8rem; margin-top:3px; }
@@ -162,7 +164,7 @@
 
 <!-- Accounts/Whitelist sub-modal -->
 <div class="modal-overlay" id="sub-overlay" onclick="closeSubModal()"></div>
-<div class="modal-box" id="sub-box" style="width:600px">
+<div class="modal-box" id="sub-box">
     <div class="mh">
         <h5 id="sub-title" class="mb-0"></h5>
         <button class="btn-close" onclick="closeSubModal()"></button>
@@ -496,9 +498,10 @@ function closeModal() {
 }
 
 // ── Sub modal ──
-function openSubModal(title, html) {
+function openSubModal(title, html, wide) {
     document.getElementById('sub-title').textContent = title;
     document.getElementById('sub-body').innerHTML = html;
+    document.getElementById('sub-box').classList.toggle('modal-wide', !!wide);
     document.getElementById('sub-overlay').style.display='block';
     document.getElementById('sub-box').style.display='block';
 }
@@ -697,7 +700,7 @@ function renderAccountsModal(svcName, rows) {
         <div class="d-flex justify-content-end mt-3">
             <button class="btn btn-secondary btn-sm" onclick="closeSubModal()">Done</button>
         </div>
-    `);
+    `, true);
 }
 
 function openAccountForm(data={}) {
@@ -714,9 +717,9 @@ function openAccountForm(data={}) {
         <div class="mb-3">
             <label class="form-label small fw-semibold">Permissions</label>
             <div class="d-flex gap-3">
-                <div class="form-check"><input class="form-check-input" type="checkbox" id="pRead"><label class="form-check-label small">Read</label></div>
-                <div class="form-check"><input class="form-check-input" type="checkbox" id="pWrite"><label class="form-check-label small">Write</label></div>
-                <div class="form-check"><input class="form-check-input" type="checkbox" id="pDelete"><label class="form-check-label small">Delete</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="pRead"><label class="form-check-label small" for="pRead">Read</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="pWrite"><label class="form-check-label small" for="pWrite">Write</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="pDelete"><label class="form-check-label small" for="pDelete">Delete</label></div>
             </div>
         </div>
         <div class="mb-3">
@@ -754,7 +757,7 @@ function openAccountForm(data={}) {
             <button class="btn btn-primary btn-sm" onclick="saveSvcAccount()">Save</button>
         </div>`;
 
-    openSubModal((editingAcctId?'Edit':'New')+' Service Account', html);
+    openSubModal((editingAcctId?'Edit':'New')+' Service Account', html, true);
     if (data.id) {
         setVal('acctUser', data.username);
         setVal('acctAuth', data.authenticationType);
