@@ -345,9 +345,11 @@ public class PortalController {
             sftpServiceRepository.findById(svcId)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
                 .<ResponseEntity<?>>map(s -> {
-                    String taken = sftpCredentialService.usernameTakenError(account.getUsername(), null);
+                    String loginUsername = sftpCredentialService.composeLoginUsername(account.getUsername(), s);
+                    String taken = sftpCredentialService.loginUsernameTakenError(loginUsername, null);
                     if (taken != null) return ResponseEntity.status(409).body(Map.of("error", taken));
                     account.setSftpService(s);
+                    account.setLoginUsername(loginUsername);
                     account.setCreatedBy(user.getEmail());
                     account.setLastUpdatedBy(user.getEmail());
                     sftpCredentialService.applyCredentials(account, account.getPassword(), account.getPublicKey());
@@ -367,9 +369,11 @@ public class PortalController {
             accountRepository.findById(id)
                 .filter(a -> a.getSftpService() != null && a.getSftpService().getId().equals(svcId))
                 .<ResponseEntity<?>>map(a -> {
-                    String taken = sftpCredentialService.usernameTakenError(updated.getUsername(), id);
+                    String loginUsername = sftpCredentialService.composeLoginUsername(updated.getUsername(), a.getSftpService());
+                    String taken = sftpCredentialService.loginUsernameTakenError(loginUsername, id);
                     if (taken != null) return ResponseEntity.status(409).body(Map.of("error", taken));
                     a.setUsername(updated.getUsername());
+                    a.setLoginUsername(loginUsername);
                     a.setEmail(updated.getEmail());
                     a.setAuthenticationType(updated.getAuthenticationType());
                     sftpCredentialService.applyCredentials(a, updated.getPassword(), updated.getPublicKey());

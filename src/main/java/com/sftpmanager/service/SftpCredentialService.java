@@ -1,5 +1,6 @@
 package com.sftpmanager.service;
 
+import com.sftpmanager.model.SftpService;
 import com.sftpmanager.model.SftpServiceAccount;
 import com.sftpmanager.repository.SftpServiceAccountRepository;
 import com.sftpmanager.util.SshKeyUtil;
@@ -11,7 +12,10 @@ import org.springframework.stereotype.Service;
  * (ProFTPD mod_sql / crypt(3)) can authenticate against:
  *  - passwords are bcrypt-hashed, never stored in plaintext
  *  - public keys get an RFC 4716 copy for ProFTPD's SFTPAuthorizedUserKeys
- *  - usernames must be globally unique (one Linux host serves all services)
+ *  - the actual login username (loginUsername) must be globally unique (one Linux
+ *    host serves all services) — it's derived from the plain `username` the customer
+ *    picks plus their service id, so the same plain username can be reused across
+ *    different services without colliding.
  */
 @Service
 public class SftpCredentialService {
@@ -23,13 +27,21 @@ public class SftpCredentialService {
         this.repository = repository;
     }
 
-    /** Returns an error message if the username is taken, else null. selfId excludes the account being edited. */
-    public String usernameTakenError(String username, Long selfId) {
-        if (username == null || username.isBlank()) return null;
+    /** Deterministic, globally-unique SFTP login credential for an account within a service. */
+    public String composeLoginUsername(String username, SftpService sftpService) {
+        if (sftpService == null || sftpService.getId() == null) {
+            throw new IllegalArgumentException("Account must belong to a valid SFTP service.");
+        }
+        return username + ".svc" + sftpService.getId();
+    }
+
+    /** Returns an error message if the login username is taken, else null. selfId excludes the account being edited. */
+    public String loginUsernameTakenError(String loginUsername, Long selfId) {
+        if (loginUsername == null || loginUsername.isBlank()) return null;
         boolean taken = selfId == null
-            ? repository.existsByUsernameIgnoreCase(username)
-            : repository.existsByUsernameIgnoreCaseAndIdNot(username, selfId);
-        return taken ? "This username is already taken. Please choose a different username." : null;
+            ? repository.existsByLoginUsernameIgnoreCase(loginUsername)
+            : repository.existsByLoginUsernameIgnoreCaseAndIdNot(loginUsername, selfId);
+        return taken ? "This username is already taken on this service. Please choose a different username." : null;
     }
 
     /**

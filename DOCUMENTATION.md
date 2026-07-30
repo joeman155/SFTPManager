@@ -82,9 +82,14 @@ assigned from the `sftphost001` runtime setting.
 | Public Key | `acctPk` | textarea | required if auth type is PUBLIC_KEY (OpenSSH format) |
 | Enabled | `acctEnabled` | checkbox | — |
 
-→ `POST` / `PUT /portal/api/services/{svcId}/accounts[/{id}]`. Username must
-be globally unique across the whole system (enforced server-side, 409 on
-conflict) since one Linux SFTP host serves every customer's accounts.
+→ `POST` / `PUT /portal/api/services/{svcId}/accounts[/{id}]`. Username only
+needs to be unique within its own service — the same plain username can be
+reused across different services/customers. The server derives the actual
+SFTP login credential as `<username>.svc<serviceId>` (returned as
+`loginUsername`, read-only), which is what's enforced globally unique
+(409 on conflict) since one Linux SFTP host serves every customer's accounts.
+The portal shows this composed login next to the account so customers know
+exactly what to type when connecting.
 
 #### New/Edit IP Whitelist Entry
 | Field | id | Type | Required |

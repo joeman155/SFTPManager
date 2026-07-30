@@ -649,6 +649,10 @@ function copyHost(id) {
     navigator.clipboard.writeText(host).then(() => alert('Copied: ' + host));
 }
 
+function copyText(text) {
+    navigator.clipboard.writeText(text).then(() => alert('Copied: ' + text));
+}
+
 // ── Service Accounts ──
 async function manageAccounts(svcId, svcName) {
     if (!svcName) { const s=(window._svcData||{})[svcId]; svcName=s?s.name:''; }
@@ -662,6 +666,8 @@ function accountsTableHtml(rows) {
     const rowsHtml = rows.map(a => `
         <tr>
             <td data-label="Username"><strong>${a.username}</strong></td>
+            <td data-label="SFTP Login"><code class="small">${a.loginUsername||''}</code>
+                ${a.loginUsername ? `<button type="button" class="btn btn-sm btn-link p-0 ms-1" title="Copy SFTP login" onclick="copyText('${a.loginUsername}')"><i class="bi bi-clipboard"></i></button>` : ''}</td>
             <td data-label="Permissions">${(a.permissions||'').split(',').filter(Boolean)
                 .map(p => `<span class="badge bg-primary-subtle text-primary me-1" style="font-size:.7rem">${p}</span>`).join('') || '<span class="text-muted small">None</span>'}</td>
             <td data-label="Status">
@@ -674,7 +680,7 @@ function accountsTableHtml(rows) {
             </div></td>
         </tr>`).join('');
     return `<div class="portal-table-wrap"><table class="table portal-table">
-        <thead><tr><th>Username</th><th>Permissions</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Username</th><th>SFTP Login</th><th>Permissions</th><th>Status</th><th></th></tr></thead>
         <tbody>${rowsHtml}</tbody>
     </table></div>`;
 }
@@ -698,9 +704,10 @@ function openAccountForm(data={}) {
     const html = `
         <div class="mb-3">
             <label class="form-label small fw-semibold">Username <span class="text-danger">*</span></label>
-            <input class="form-control form-control-sm" type="text" id="acctUser" placeholder="alphanumeric only">
+            <input class="form-control form-control-sm" type="text" id="acctUser" placeholder="alphanumeric only" oninput="updateAcctLoginPreview()">
             <div class="field-error" id="acctUser-err"></div>
-            <div class="form-text">Only letters and numbers allowed, no spaces.</div>
+            <div class="form-text">Only letters and numbers allowed, no spaces.
+                SFTP login will be: <code id="acctLoginPreview">—</code></div>
         </div>
         ${fld('Email (optional)','acctEmail','email','')}
         <div class="mb-3">
@@ -760,6 +767,17 @@ function openAccountForm(data={}) {
         document.getElementById('pWrite').checked = perms.includes('WRITE');
         document.getElementById('pDelete').checked = perms.includes('DELETE');
     }
+    updateAcctLoginPreview();
+}
+
+// The real SFTP login is server-computed as "<username>.svc<serviceId>" (Option A: lets
+// the same plain username be reused across different services). Mirror that here so
+// customers see the actual credential before saving.
+function updateAcctLoginPreview() {
+    const el = document.getElementById('acctLoginPreview');
+    if (!el) return;
+    const username = getVal('acctUser');
+    el.textContent = (username && currentSvcId) ? `${username}.svc${currentSvcId}` : '—';
 }
 
 function toggleAuth() {
@@ -1605,6 +1623,25 @@ async function saveMockCard(slot) {
 let obStep = 1;
 let obData = { planId: null, phone: null, cardSaved: false };
 let obPlans = [];
+
+// Let Enter submit the current onboarding step, same as clicking the step's button.
+document.getElementById('onboarding-box').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'textarea' || tag === 'button') return; // allow newlines / native button activation
+
+    e.preventDefault();
+
+    // Step 2's card widget has its own Save button — trigger that instead of skipping payment.
+    if (obStep === 2) {
+        const cardForm = document.getElementById('ob-card-form');
+        if (cardForm.contains(e.target)) {
+            const saveBtn = cardForm.querySelector('.btn-primary');
+            if (saveBtn) { saveBtn.click(); return; }
+        }
+    }
+    obNext();
+});
 
 async function checkOnboarding() {
     const res = await fetch('/portal/api/onboarding');

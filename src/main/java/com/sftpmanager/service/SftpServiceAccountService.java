@@ -1,5 +1,6 @@
 package com.sftpmanager.service;
 
+import com.sftpmanager.model.SftpService;
 import com.sftpmanager.model.SftpServiceAccount;
 import com.sftpmanager.repository.SftpServiceAccountRepository;
 import com.sftpmanager.repository.SftpServiceRepository;
@@ -29,29 +30,34 @@ public class SftpServiceAccountService {
     public Optional<SftpServiceAccount> findById(Long id) { return repository.findById(id); }
 
     public SftpServiceAccount save(SftpServiceAccount account, Long sftpServiceId) {
-        String err = credentialService.usernameTakenError(account.getUsername(), null);
+        SftpService sftpService = sftpServiceId != null ? sftpServiceRepository.findById(sftpServiceId).orElse(null) : null;
+        if (sftpService == null) throw new IllegalArgumentException("A valid SFTP service is required.");
+        account.setSftpService(sftpService);
+        account.setLoginUsername(credentialService.composeLoginUsername(account.getUsername(), sftpService));
+        String err = credentialService.loginUsernameTakenError(account.getLoginUsername(), null);
         if (err != null) throw new IllegalArgumentException(err);
-        if (sftpServiceId != null) {
-            sftpServiceRepository.findById(sftpServiceId).ifPresent(account::setSftpService);
-        }
         credentialService.applyCredentials(account, account.getPassword(), account.getPublicKey());
         return repository.save(account);
     }
 
     public SftpServiceAccount update(Long id, SftpServiceAccount updated, Long sftpServiceId) {
-        String err = credentialService.usernameTakenError(updated.getUsername(), id);
-        if (err != null) throw new IllegalArgumentException(err);
         return repository.findById(id).map(existing -> {
+            SftpService sftpService = sftpServiceId != null
+                ? sftpServiceRepository.findById(sftpServiceId).orElse(existing.getSftpService())
+                : existing.getSftpService();
+            if (sftpService == null) throw new IllegalArgumentException("A valid SFTP service is required.");
+            String loginUsername = credentialService.composeLoginUsername(updated.getUsername(), sftpService);
+            String err = credentialService.loginUsernameTakenError(loginUsername, id);
+            if (err != null) throw new IllegalArgumentException(err);
             existing.setAuthenticationType(updated.getAuthenticationType());
             existing.setUsername(updated.getUsername());
+            existing.setLoginUsername(loginUsername);
+            existing.setSftpService(sftpService);
             existing.setEmail(updated.getEmail());
             credentialService.applyCredentials(existing, updated.getPassword(), updated.getPublicKey());
             existing.setEnabled(updated.getEnabled());
             existing.setPermissions(updated.getPermissions());
             existing.setLastUpdatedBy(updated.getLastUpdatedBy());
-            if (sftpServiceId != null) {
-                sftpServiceRepository.findById(sftpServiceId).ifPresent(existing::setSftpService);
-            }
             return repository.save(existing);
         }).orElseThrow(() -> new RuntimeException("SftpServiceAccount not found: " + id));
     }

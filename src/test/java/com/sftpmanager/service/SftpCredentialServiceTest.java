@@ -1,5 +1,6 @@
 package com.sftpmanager.service;
 
+import com.sftpmanager.model.SftpService;
 import com.sftpmanager.model.SftpServiceAccount;
 import com.sftpmanager.repository.SftpServiceAccountRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -25,42 +27,60 @@ class SftpCredentialServiceTest {
         service = new SftpCredentialService(repository);
     }
 
-    // ── usernameTakenError ──
+    // ── composeLoginUsername ──
 
     @Test
-    void nullOrBlankUsernameIsNeverTaken() {
-        assertThat(service.usernameTakenError(null, null)).isNull();
-        assertThat(service.usernameTakenError("  ", null)).isNull();
+    void composesLoginUsernameFromUsernameAndServiceId() {
+        SftpService svc = new SftpService();
+        svc.setId(42L);
+
+        assertThat(service.composeLoginUsername("alice", svc)).isEqualTo("alice.svc42");
+    }
+
+    @Test
+    void composeLoginUsernameRejectsMissingService() {
+        assertThatThrownBy(() -> service.composeLoginUsername("alice", null))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.composeLoginUsername("alice", new SftpService()))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── loginUsernameTakenError ──
+
+    @Test
+    void nullOrBlankLoginUsernameIsNeverTaken() {
+        assertThat(service.loginUsernameTakenError(null, null)).isNull();
+        assertThat(service.loginUsernameTakenError("  ", null)).isNull();
         verifyNoInteractions(repository);
     }
 
     @Test
-    void newAccountWithTakenUsernameReturnsError() {
-        when(repository.existsByUsernameIgnoreCase("alice")).thenReturn(true);
+    void newAccountWithTakenLoginUsernameReturnsError() {
+        when(repository.existsByLoginUsernameIgnoreCase("alice.svc1")).thenReturn(true);
 
-        assertThat(service.usernameTakenError("alice", null))
+        assertThat(service.loginUsernameTakenError("alice.svc1", null))
             .contains("already taken");
     }
 
     @Test
-    void newAccountWithFreeUsernameReturnsNull() {
-        when(repository.existsByUsernameIgnoreCase("alice")).thenReturn(false);
+    void newAccountWithFreeLoginUsernameReturnsNull() {
+        when(repository.existsByLoginUsernameIgnoreCase("alice.svc1")).thenReturn(false);
 
-        assertThat(service.usernameTakenError("alice", null)).isNull();
+        assertThat(service.loginUsernameTakenError("alice.svc1", null)).isNull();
     }
 
     @Test
     void editingAccountExcludesItselfFromUniquenessCheck() {
-        when(repository.existsByUsernameIgnoreCaseAndIdNot("alice", 7L)).thenReturn(false);
+        when(repository.existsByLoginUsernameIgnoreCaseAndIdNot("alice.svc1", 7L)).thenReturn(false);
 
-        assertThat(service.usernameTakenError("alice", 7L)).isNull();
+        assertThat(service.loginUsernameTakenError("alice.svc1", 7L)).isNull();
     }
 
     @Test
     void editingAccountStillDetectsClashWithOtherAccount() {
-        when(repository.existsByUsernameIgnoreCaseAndIdNot("alice", 7L)).thenReturn(true);
+        when(repository.existsByLoginUsernameIgnoreCaseAndIdNot("alice.svc1", 7L)).thenReturn(true);
 
-        assertThat(service.usernameTakenError("alice", 7L)).contains("already taken");
+        assertThat(service.loginUsernameTakenError("alice.svc1", 7L)).contains("already taken");
     }
 
     // ── applyCredentials ──

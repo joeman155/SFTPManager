@@ -14,17 +14,25 @@ lookups.
   are never returned by the app's APIs.
 - **RFC 4716 public keys** — `public_key_rfc4716` column, auto-converted from
   the OpenSSH-format key the user pastes (mod_sftp requires RFC 4716).
-- **Globally unique usernames** — enforced at creation/edit (one Linux host
-  serves every service, so `backup` can only exist once).
+- **Globally unique login usernames** — the customer-facing `username` field
+  (e.g. `backup`) only needs to be unique *within its own SFTP Service*, so
+  the same plain username can be reused across different customers/services.
+  The app derives the actual SFTP login credential as `<username>.svc<serviceId>`
+  (e.g. `backup.svc42`), stored in `login_username`, which is what's enforced
+  globally unique (DB unique index) and what ProFTPD's `%U` query matches
+  against — one Linux host still serves every service. The portal and admin
+  UI show this composed login clearly next to each account.
 - **`proftpd_users` view** — one row per *loginable* account: enabled, and the
   owning customer is not deactivated / locked / closed. Every kill-switch in
   the admin screen applies to SFTP logins on the next connection.
   Columns: `userid, passwd, uid, gid, homedir, shell, ssh_key, permissions`.
-  Home dirs are `/srv/sftp/svc<serviceId>` — **shared per service**, so every
-  account under the same SFTP Service sees the same files (they all run as
-  uid/gid 2001, so there are no ownership conflicts between them).
+  `userid` is `login_username` (the composed `<username>.svc<serviceId>`), not
+  the plain `username`. Home dirs are `/srv/sftp/svc<serviceId>` — **shared
+  per service**, so every account under the same SFTP Service sees the same
+  files (they all run as uid/gid 2001, so there are no ownership conflicts
+  between them).
 - **`proftpd_allowed_ips` view** — `(name, allowed)` pairs from the IP
-  whitelist, per username.
+  whitelist, keyed by `login_username` (matches `%U` at auth time).
 
 Note: existing plaintext passwords in old rows won't work — accounts need
 their password (re)saved once so it gets hashed. With `ddl-auto=create`

@@ -21,6 +21,13 @@ public class SftpServiceAccount {
     @Column(name = "username", nullable = false)
     private String username;
 
+    // Server-computed as "<username>.svc<sftpServiceId>" — the actual SFTP login credential
+    // ProFTPD authenticates against. Globally unique, which lets the same plain `username`
+    // be reused across different services. Never accepted from client JSON.
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    @Column(name = "login_username", nullable = false, unique = true)
+    private String loginUsername;
+
     @Column(name = "email")
     private String email;
 
@@ -74,6 +81,8 @@ public class SftpServiceAccount {
     public void setAuthenticationType(String v) { this.authenticationType = v; }
     public String getUsername() { return username; }
     public void setUsername(String v) { this.username = v; }
+    public String getLoginUsername() { return loginUsername; }
+    public void setLoginUsername(String v) { this.loginUsername = v; }
     public String getEmail() { return email; }
     public void setEmail(String v) { this.email = v; }
     public String getPassword() { return password; }

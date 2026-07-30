@@ -147,7 +147,7 @@ public class DataInitialiser implements CommandLineRunner {
     private void createProftpdViews() {
         jdbcTemplate.execute("""
             CREATE OR REPLACE VIEW proftpd_users AS
-            SELECT a.username                                            AS userid,
+            SELECT a.login_username                                      AS userid,
                    a.password                                            AS passwd,
                    2001                                                  AS uid,
                    2001                                                  AS gid,
@@ -166,7 +166,7 @@ public class DataInitialiser implements CommandLineRunner {
 
         jdbcTemplate.execute("""
             CREATE OR REPLACE VIEW proftpd_allowed_ips AS
-            SELECT a.username    AS name,
+            SELECT a.login_username AS name,
                    w.ip_address  AS allowed
             FROM sftp_service_account a
             JOIN sftp_service_ipwhitelist w ON w.sftp_service_id = a.sftp_service_id
