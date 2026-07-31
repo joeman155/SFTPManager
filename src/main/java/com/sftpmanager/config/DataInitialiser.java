@@ -169,12 +169,15 @@ public class DataInitialiser implements CommandLineRunner {
         // notation ("172.105.168.0/24") with "bad net/mask expression" and
         // silently drops the rule. The app validates/stores CIDR (the format
         // admins actually expect to type), so convert it here at read time.
+        // A /32 is a single exact host, and tcp-wrappers syntax for that is
+        // just the bare address (no net/mask pair) — mod_wrap2 doesn't accept
+        // "x.x.x.x/255.255.255.255" the way it accepts a real subnet mask.
         jdbcTemplate.execute("""
             CREATE OR REPLACE VIEW proftpd_allowed_ips AS
             SELECT a.login_username AS name,
-                   CASE WHEN w.ip_address LIKE '%/%'
+                   CASE WHEN w.ip_address LIKE '%/%' AND masklen(w.ip_address::inet) < 32
                         THEN host(w.ip_address::inet) || '/' || split_part(netmask(w.ip_address::inet)::text, '/', 1)
-                        ELSE w.ip_address
+                        ELSE host(w.ip_address::inet)
                    END AS allowed
             FROM sftp_service_account a
             JOIN sftp_service_ipwhitelist w ON w.sftp_service_id = a.sftp_service_id
