@@ -164,10 +164,18 @@ public class DataInitialiser implements CommandLineRunner {
               AND COALESCE(u.account_closed, false) = false
             """);
 
+        // mod_wrap2 speaks tcp-wrappers syntax, which needs a dotted-decimal
+        // netmask ("172.105.168.0/255.255.255.0") — it rejects CIDR prefix
+        // notation ("172.105.168.0/24") with "bad net/mask expression" and
+        // silently drops the rule. The app validates/stores CIDR (the format
+        // admins actually expect to type), so convert it here at read time.
         jdbcTemplate.execute("""
             CREATE OR REPLACE VIEW proftpd_allowed_ips AS
             SELECT a.login_username AS name,
-                   w.ip_address  AS allowed
+                   CASE WHEN w.ip_address LIKE '%/%'
+                        THEN host(w.ip_address::inet) || '/' || netmask(w.ip_address::inet)::text
+                        ELSE w.ip_address
+                   END AS allowed
             FROM sftp_service_account a
             JOIN sftp_service_ipwhitelist w ON w.sftp_service_id = a.sftp_service_id
             WHERE COALESCE(w.enabled, false) = true

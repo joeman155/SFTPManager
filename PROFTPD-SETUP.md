@@ -317,6 +317,7 @@ sudo ss -tlnp | grep proftpd      # what's actually listening
 | Login OK but wrong directory | `CreateHome` missing, or `/srv/sftp` perms — homedir must be creatable by ProFTPD |
 | SQL connect errors | `pg_hba.conf` / role grants / `SQLConnectInfo` credentials |
 | `permission denied for view proftpd_...` appearing after an app restart | The app's schema rebuild destroyed the view grants. Newer app versions re-grant automatically at startup (role must be named `proftpd`); on older versions re-run the GRANT manually after each restart |
+| `wrap2.log`: `warning: bad net/mask expression: '172.105.168.0/24'` | mod_wrap2 needs a dotted-decimal netmask (`172.105.168.0/255.255.255.0`), not CIDR prefix notation — it silently drops any rule it can't parse (fail-open per the WrapUserTables allow/deny semantics). The app stores CIDR (what admins type) and `proftpd_allowed_ips` converts it to dotted-decimal at read time; newer app versions already do this — restart the app so `CREATE OR REPLACE VIEW` picks up the fix, no DB migration needed |
 
 ## Security notes
 
