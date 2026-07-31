@@ -227,7 +227,7 @@ public class PortalController {
     public ResponseEntity<?> getServices(@AuthenticationPrincipal OAuth2User principal, HttpSession session) {
         return currentUser(principal, session)
             .<ResponseEntity<?>>map(user -> {
-                var services = sftpServiceRepository.findByUserId(user.getId());
+                var services = sftpServiceRepository.findByUserIdOrderByNameAscCreationDateAsc(user.getId());
                 // Real disk usage per service, measured by XFS project quota
                 // accounting on the SFTP host; limit comes from the plan
                 var usedBytes = storageUsageService.usedBytesByServiceIds(

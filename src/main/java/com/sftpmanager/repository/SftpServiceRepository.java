@@ -8,4 +8,6 @@ import java.util.List;
 @Repository
 public interface SftpServiceRepository extends JpaRepository<SftpService, Long> {
     List<SftpService> findByUserId(Long userId);
+
+    List<SftpService> findByUserIdOrderByNameAscCreationDateAsc(Long userId);
 }

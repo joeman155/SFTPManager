@@ -591,7 +591,7 @@ function renderUsersTable() {
         return;
     }
     tbody.innerHTML = pageUsers.map(u => `<tr>
-        <td>${u.firstName||''} ${u.surname||''}</td>
+        <td>${u.firstName||''} ${u.surname||''}${u.phone ? `<div class="text-muted" style="font-size:.72rem"><i class="bi bi-telephone me-1"></i>${u.phone}</div>` : ''}</td>
         <td>${u.email||''}${u.signupIp ? `<div class="text-muted" style="font-size:.72rem" title="IP address captured at signup"><i class="bi bi-geo-alt me-1"></i>${u.signupIp}</div>` : ''}</td>
         <td>${u.company||''}</td>
         <td>${u.accountControls ? `<span class="badge bg-primary-subtle text-primary">${u.accountControls.plan}</span>` : '<span class="text-muted">—</span>'}</td>
