@@ -3,6 +3,9 @@ package com.sftpmanager.service;
 import com.sftpmanager.model.AccountControls;
 import com.sftpmanager.model.User;
 import com.sftpmanager.repository.AccountControlsRepository;
+import com.sftpmanager.repository.EmailVerificationRepository;
+import com.sftpmanager.repository.PasswordResetRepository;
+import com.sftpmanager.repository.PaymentArchiveRepository;
 import com.sftpmanager.repository.PaymentRepository;
 import com.sftpmanager.repository.PortalUserRepository;
 import com.sftpmanager.repository.SftpServiceRepository;
@@ -35,14 +38,18 @@ class UserServiceTest {
     @Mock private SftpServiceRepository sftpServiceRepository;
     @Mock private SftpServiceService sftpServiceService;
     @Mock private PaymentRepository paymentRepository;
+    @Mock private PaymentArchiveRepository paymentArchiveRepository;
     @Mock private PortalUserRepository portalUserRepository;
+    @Mock private EmailVerificationRepository emailVerificationRepository;
+    @Mock private PasswordResetRepository passwordResetRepository;
 
     private UserService service;
 
     @BeforeEach
     void setUp() {
         service = new UserService(userRepository, accountControlsRepository, billingService,
-                sftpServiceRepository, sftpServiceService, paymentRepository, portalUserRepository);
+                sftpServiceRepository, sftpServiceService, paymentRepository, paymentArchiveRepository,
+                portalUserRepository, emailVerificationRepository, passwordResetRepository);
     }
 
     private User existingUser() {
@@ -51,6 +58,7 @@ class UserServiceTest {
         u.setFirstName("Old");
         u.setSurname("Name");
         u.setEmail("old@example.com");
+        u.setPhone("0400000000");
         return u;
     }
 
@@ -221,6 +229,7 @@ class UserServiceTest {
 
     @Test
     void deleteDelegatesToRepository() {
+        when(userRepository.findById(7L)).thenReturn(Optional.empty());
         when(sftpServiceRepository.findByUserId(7L)).thenReturn(Collections.emptyList());
         when(paymentRepository.findByUserIdOrderByCreatedAtDesc(7L)).thenReturn(Collections.emptyList());
         when(portalUserRepository.findByUserId(7L)).thenReturn(Optional.empty());
@@ -229,20 +238,27 @@ class UserServiceTest {
 
         verify(userRepository).deleteById(7L);
         verify(userRepository, never()).deleteAll();
+        verifyNoInteractions(emailVerificationRepository, passwordResetRepository);
     }
 
     @Test
-    void deleteCascadesOwnedServicesPaymentsAndPortalLink() {
+    void deleteCascadesOwnedServicesPaymentsPortalLinkAndEmailKeyedRecords() {
+        User user = existingUser(); // email: old@example.com
         com.sftpmanager.model.SftpService svc1 = new com.sftpmanager.model.SftpService();
         svc1.setId(11L);
         com.sftpmanager.model.SftpService svc2 = new com.sftpmanager.model.SftpService();
         svc2.setId(12L);
         com.sftpmanager.model.Payment payment = new com.sftpmanager.model.Payment();
         com.sftpmanager.model.PortalUser portalUser = new com.sftpmanager.model.PortalUser();
+        com.sftpmanager.model.EmailVerification verification = new com.sftpmanager.model.EmailVerification();
+        com.sftpmanager.model.PasswordReset reset = new com.sftpmanager.model.PasswordReset();
 
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
         when(sftpServiceRepository.findByUserId(7L)).thenReturn(java.util.List.of(svc1, svc2));
         when(paymentRepository.findByUserIdOrderByCreatedAtDesc(7L)).thenReturn(java.util.List.of(payment));
         when(portalUserRepository.findByUserId(7L)).thenReturn(Optional.of(portalUser));
+        when(emailVerificationRepository.findByEmail("old@example.com")).thenReturn(java.util.List.of(verification));
+        when(passwordResetRepository.findByEmail("old@example.com")).thenReturn(java.util.List.of(reset));
 
         service.deleteById(7L);
 
@@ -250,6 +266,8 @@ class UserServiceTest {
         verify(sftpServiceService).deleteById(12L);
         verify(paymentRepository).deleteAll(java.util.List.of(payment));
         verify(portalUserRepository).delete(portalUser);
+        verify(emailVerificationRepository).deleteAll(java.util.List.of(verification));
+        verify(passwordResetRepository).deleteAll(java.util.List.of(reset));
         verify(userRepository).deleteById(7L);
     }
 }

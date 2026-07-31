@@ -1,8 +1,13 @@
 package com.sftpmanager.service;
 
 import com.sftpmanager.model.AccountControls;
+import com.sftpmanager.model.Payment;
+import com.sftpmanager.model.PaymentArchive;
 import com.sftpmanager.model.User;
 import com.sftpmanager.repository.AccountControlsRepository;
+import com.sftpmanager.repository.EmailVerificationRepository;
+import com.sftpmanager.repository.PasswordResetRepository;
+import com.sftpmanager.repository.PaymentArchiveRepository;
 import com.sftpmanager.repository.PaymentRepository;
 import com.sftpmanager.repository.PortalUserRepository;
 import com.sftpmanager.repository.SftpServiceRepository;
@@ -24,20 +29,29 @@ public class UserService {
     private final SftpServiceRepository sftpServiceRepository;
     private final SftpServiceService sftpServiceService;
     private final PaymentRepository paymentRepository;
+    private final PaymentArchiveRepository paymentArchiveRepository;
     private final PortalUserRepository portalUserRepository;
+    private final EmailVerificationRepository emailVerificationRepository;
+    private final PasswordResetRepository passwordResetRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public UserService(UserRepository userRepository, AccountControlsRepository accountControlsRepository,
                        BillingService billingService, SftpServiceRepository sftpServiceRepository,
                        SftpServiceService sftpServiceService, PaymentRepository paymentRepository,
-                       PortalUserRepository portalUserRepository) {
+                       PaymentArchiveRepository paymentArchiveRepository,
+                       PortalUserRepository portalUserRepository,
+                       EmailVerificationRepository emailVerificationRepository,
+                       PasswordResetRepository passwordResetRepository) {
         this.userRepository = userRepository;
         this.accountControlsRepository = accountControlsRepository;
         this.billingService = billingService;
         this.sftpServiceRepository = sftpServiceRepository;
         this.sftpServiceService = sftpServiceService;
         this.paymentRepository = paymentRepository;
+        this.paymentArchiveRepository = paymentArchiveRepository;
         this.portalUserRepository = portalUserRepository;
+        this.emailVerificationRepository = emailVerificationRepository;
+        this.passwordResetRepository = passwordResetRepository;
     }
 
     public List<User> findAll() { return userRepository.findAll(); }
@@ -148,12 +162,56 @@ public class UserService {
      * Services (and their accounts/whitelist rows), payments, and the Google-portal
      * link all carry a FK back to this user, so they must be cleared first or the
      * delete fails silently on a DB constraint violation.
+     *
+     * Payments are archived (not just deleted) — financial records typically need
+     * to survive a customer deletion for accounting/tax purposes, so each Payment
+     * is snapshotted into payments_arc (with the user's identity captured at time
+     * of archiving, since payments_arc intentionally has no FK back to users) before
+     * the original row is removed.
+     *
+     * Email verification codes and password-reset tokens aren't linked by FK at
+     * all — they're keyed by the raw email address, since they exist to serve
+     * requests made before/outside of an authenticated session. Left behind,
+     * a leftover "verified" row lets a re-created account with the same email
+     * skip email verification entirely, so they must be cleared by email too.
      */
     public void deleteById(Long id) {
+        User user = userRepository.findById(id).orElse(null);
         sftpServiceRepository.findByUserId(id).forEach(svc -> sftpServiceService.deleteById(svc.getId()));
-        paymentRepository.deleteAll(paymentRepository.findByUserIdOrderByCreatedAtDesc(id));
+
+        List<Payment> payments = paymentRepository.findByUserIdOrderByCreatedAtDesc(id);
+        if (user != null && !payments.isEmpty()) {
+            paymentArchiveRepository.saveAll(payments.stream().map(p -> archiveOf(p, user)).toList());
+        }
+        paymentRepository.deleteAll(payments);
+
         portalUserRepository.findByUserId(id).ifPresent(portalUserRepository::delete);
+        if (user != null) {
+            emailVerificationRepository.deleteAll(emailVerificationRepository.findByEmail(user.getEmail()));
+            passwordResetRepository.deleteAll(passwordResetRepository.findByEmail(user.getEmail()));
+        }
         userRepository.deleteById(id);
+    }
+
+    private PaymentArchive archiveOf(Payment p, User user) {
+        PaymentArchive a = new PaymentArchive();
+        a.setOriginalPaymentId(p.getId());
+        a.setUserId(user.getId());
+        a.setEmail(user.getEmail());
+        a.setFirstname(user.getFirstName());
+        a.setSurname(user.getSurname());
+        a.setMobileNumber(user.getPhone());
+        a.setAmountCents(p.getAmountCents());
+        a.setCurrency(p.getCurrency());
+        a.setStatus(p.getStatus());
+        a.setCardUsed(p.getCardUsed());
+        a.setCardDisplay(p.getCardDisplay());
+        a.setDescription(p.getDescription());
+        a.setGatewayPaymentId(p.getGatewayPaymentId());
+        a.setFailureReason(p.getFailureReason());
+        a.setInitiatedBy(p.getInitiatedBy());
+        a.setPaymentCreatedAt(p.getCreatedAt());
+        return a;
     }
 
     public void resetPassword(User user, String newPassword) {
