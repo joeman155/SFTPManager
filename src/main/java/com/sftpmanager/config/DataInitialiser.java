@@ -175,10 +175,10 @@ public class DataInitialiser implements CommandLineRunner {
         jdbcTemplate.execute("""
             CREATE OR REPLACE VIEW proftpd_allowed_ips AS
             SELECT a.login_username AS name,
-                   CASE WHEN w.ip_address LIKE '%/%' AND masklen(w.ip_address::inet) < 32
-                        THEN host(w.ip_address::inet) || '/' || split_part(netmask(w.ip_address::inet)::text, '/', 1)
-                        ELSE host(w.ip_address::inet)
-                   END AS allowed
+                   (CASE WHEN w.ip_address LIKE '%/%' AND masklen(w.ip_address::inet) < 32
+                         THEN host(w.ip_address::inet) || '/' || split_part(netmask(w.ip_address::inet)::text, '/', 1)
+                         ELSE host(w.ip_address::inet)
+                    END)::varchar AS allowed
             FROM sftp_service_account a
             JOIN sftp_service_ipwhitelist w ON w.sftp_service_id = a.sftp_service_id
             WHERE COALESCE(w.enabled, false) = true
