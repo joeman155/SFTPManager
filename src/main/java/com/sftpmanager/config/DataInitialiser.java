@@ -173,7 +173,7 @@ public class DataInitialiser implements CommandLineRunner {
             CREATE OR REPLACE VIEW proftpd_allowed_ips AS
             SELECT a.login_username AS name,
                    CASE WHEN w.ip_address LIKE '%/%'
-                        THEN host(w.ip_address::inet) || '/' || netmask(w.ip_address::inet)::text
+                        THEN host(w.ip_address::inet) || '/' || split_part(netmask(w.ip_address::inet)::text, '/', 1)
                         ELSE w.ip_address
                    END AS allowed
             FROM sftp_service_account a
