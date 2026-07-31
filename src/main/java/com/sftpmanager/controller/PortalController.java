@@ -318,7 +318,13 @@ public class PortalController {
         return currentUser(principal, session).map(user ->
             sftpServiceRepository.findById(id)
                 .filter(s -> s.getUser() != null && s.getUser().getId().equals(user.getId()))
-                .map(s -> { sftpServiceRepository.delete(s); return ResponseEntity.noContent().build(); })
+                .map(s -> {
+                    // Accounts and whitelist rules have a non-nullable FK to their service, so they must go first.
+                    accountRepository.deleteAll(accountRepository.findBySftpServiceId(id));
+                    whitelistRepository.deleteAll(whitelistRepository.findBySftpServiceId(id));
+                    sftpServiceRepository.delete(s);
+                    return ResponseEntity.noContent().build();
+                })
                 .orElse(ResponseEntity.status(403).build())
         ).orElse(ResponseEntity.status(401).build());
     }
