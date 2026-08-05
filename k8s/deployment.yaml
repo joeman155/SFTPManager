@@ -92,6 +92,16 @@ spec:
                 secretKeyRef:
                   name: sftp-manager-secrets
                   key: APP_BASE_URL
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sftp-manager-secrets
+                  key: STRIPE_SECRET_KEY
+            - name: STRIPE_PUBLISHABLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sftp-manager-secrets
+                  key: STRIPE_PUBLISHABLE_KEY
           readinessProbe:
             httpGet:
               path: /healthz
