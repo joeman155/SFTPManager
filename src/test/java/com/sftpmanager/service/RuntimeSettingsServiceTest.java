@@ -46,12 +46,14 @@ class RuntimeSettingsServiceTest {
         RuntimeSettings updated = new RuntimeSettings();
         updated.setName("welcomeemail");
         updated.setValue("<html>hi {{firstName}}</html>");
+        updated.setDescription("Sent to new users on signup");
         updated.setLastUpdatedBy("admin");
 
         RuntimeSettings result = service.update(1L, updated);
 
         assertThat(result.getName()).isEqualTo("welcomeemail");
         assertThat(result.getValue()).isEqualTo("<html>hi {{firstName}}</html>");
+        assertThat(result.getDescription()).isEqualTo("Sent to new users on signup");
         assertThat(result.getLastUpdatedBy()).isEqualTo("admin");
     }
 

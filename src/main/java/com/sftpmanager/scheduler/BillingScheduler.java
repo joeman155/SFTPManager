@@ -6,7 +6,7 @@ import com.sftpmanager.service.BillingService;
 import com.sftpmanager.service.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
+import com.sftpmanager.service.RuntimeConfigService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -35,31 +35,31 @@ public class BillingScheduler {
     private final UserRepository userRepository;
     private final BillingService billingService;
     private final EmailService emailService;
-
-    @Value("${billing.scheduler.enabled:true}")
-    private boolean enabled;
-
-    @Value("${billing.scheduler.dry-run:true}")
-    private boolean dryRun;
+    private final RuntimeConfigService config;
 
     public BillingScheduler(UserRepository userRepository,
                             BillingService billingService,
-                            EmailService emailService) {
+                            EmailService emailService,
+                            RuntimeConfigService config) {
         this.userRepository = userRepository;
         this.billingService = billingService;
         this.emailService = emailService;
+        this.config = config;
     }
 
     // Daily at 02:30
     @Scheduled(cron = "0 30 2 * * *")
     public void runMonthlyBilling() {
-        if (!enabled) return;
+        if (!config.getBoolean("billing.scheduler.enabled", true)) return;
         billUsersDueToday();
     }
 
     /** Extracted so the admin "Run billing now" endpoint can trigger it too. */
     public String billUsersDueToday() {
         LocalDate today = LocalDate.now();
+        // Read once so a single run is internally consistent even if an
+        // admin flips the setting while this loop is in progress.
+        boolean dryRun = config.getBoolean("billing.scheduler.dry-run", true);
         List<User> users = userRepository.findAll();
         int due = 0, charged = 0, failed = 0, skipped = 0;
 
@@ -109,5 +109,5 @@ public class BillingScheduler {
         return summary;
     }
 
-    public boolean isDryRun() { return dryRun; }
+    public boolean isDryRun() { return config.getBoolean("billing.scheduler.dry-run", true); }
 }

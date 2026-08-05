@@ -73,6 +73,29 @@ public class DataInitialiser implements CommandLineRunner {
             runtimeSettingsRepository.save(cap);
         }
 
+        // Seed billing.* runtime-tunable settings (replaces the old
+        // application.properties billing.* keys — admin-editable at runtime
+        // with no deploy needed; see RuntimeConfigService for how these are
+        // read). Stripe API keys are NOT here — they stay as env-injected
+        // secrets, since this table's values are shown in plaintext in the
+        // admin UI.
+        seedIfMissing("billing.enabled", "true",
+            "Master switch — every charge passes these guardrails regardless of who initiates it. False = nothing can charge.");
+        seedIfMissing("billing.allow-live-charges", "false",
+            "SAFETY: while false, a live Stripe key can never take real money.");
+        seedIfMissing("billing.max-charge-cents", "50000",
+            "Hard cap per single charge, in cents (50000 = $500).");
+        seedIfMissing("billing.max-charges-per-user-per-day", "2",
+            "Per-user daily charge-attempt limit (runaway-loop protection).");
+        seedIfMissing("billing.max-charges-per-day", "50",
+            "Global daily charge-attempt limit (runaway-loop protection).");
+        seedIfMissing("billing.currency", "aud",
+            "Currency code used for all charges (e.g. aud, usd).");
+        seedIfMissing("billing.scheduler.enabled", "true",
+            "Automated monthly billing job (runs daily at 02:30).");
+        seedIfMissing("billing.scheduler.dry-run", "true",
+            "SAFETY: dry-run only LOGS what would be charged; set false to actually bill.");
+
         // Seed SFTP host
         if (runtimeSettingsRepository.findByName("sftphost001").isEmpty()) {
             RuntimeSettings host = new RuntimeSettings();
@@ -137,6 +160,20 @@ public class DataInitialiser implements CommandLineRunner {
         }
     }
 
+    /** Seeds a runtime_settings row only if it doesn't already exist —
+     *  never overwrites a value an admin has since changed. */
+    private void seedIfMissing(String name, String value, String description) {
+        if (runtimeSettingsRepository.findByName(name).isEmpty()) {
+            RuntimeSettings setting = new RuntimeSettings();
+            setting.setName(name);
+            setting.setValue(value);
+            setting.setDescription(description);
+            setting.setCreatedBy("system");
+            setting.setLastUpdatedBy("system");
+            runtimeSettingsRepository.save(setting);
+        }
+    }
+
     /**
      * Views consumed by ProFTPD (mod_sql_postgres) on the SFTP hosts —
      * see PROFTPD-SETUP.md. Recreated on every start since ddl-auto=create
@@ -174,7 +211,7 @@ public class DataInitialiser implements CommandLineRunner {
         // "x.x.x.x/255.255.255.255" the way it accepts a real subnet mask.
         jdbcTemplate.execute("""
             CREATE OR REPLACE VIEW proftpd_allowed_ips AS
-            SELECT a.login_username AS name,
+            SELECT DISTINCT a.login_username AS name,
                    (CASE WHEN w.ip_address LIKE '%/%' AND masklen(w.ip_address::inet) < 32
                          THEN host(w.ip_address::inet) || '/' || split_part(netmask(w.ip_address::inet)::text, '/', 1)
                          ELSE host(w.ip_address::inet)

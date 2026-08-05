@@ -41,19 +41,23 @@ class BillingServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private PaymentRepository paymentRepository;
     @Mock private PaymentGateway gateway;
+    @Mock private RuntimeConfigService config;
 
     private BillingService service;
 
     @BeforeEach
     void setUp() throws GatewayException {
-        service = new BillingService(userRepository, paymentRepository);
+        service = new BillingService(userRepository, paymentRepository, config);
         ReflectionTestUtils.setField(service, "gateway", gateway);
-        ReflectionTestUtils.setField(service, "billingEnabled", true);
-        ReflectionTestUtils.setField(service, "allowLiveCharges", false);
-        ReflectionTestUtils.setField(service, "maxChargeCents", 50000L);
-        ReflectionTestUtils.setField(service, "maxChargesPerUserPerDay", 2L);
-        ReflectionTestUtils.setField(service, "maxChargesPerDay", 50L);
-        ReflectionTestUtils.setField(service, "currency", "aud");
+
+        // Defaults mirroring the old application.properties fallbacks —
+        // individual tests override via when(...) to exercise a non-default.
+        when(config.getBoolean("billing.enabled", true)).thenReturn(true);
+        when(config.getBoolean("billing.allow-live-charges", false)).thenReturn(false);
+        when(config.getLong("billing.max-charge-cents", 50000L)).thenReturn(50000L);
+        when(config.getLong("billing.max-charges-per-user-per-day", 2L)).thenReturn(2L);
+        when(config.getLong("billing.max-charges-per-day", 50L)).thenReturn(50L);
+        when(config.getString("billing.currency", "aud")).thenReturn("aud");
 
         when(gateway.mode()).thenReturn("mock");
         when(gateway.ensureCustomer(any(), any(), any())).thenReturn("cus_1");
@@ -100,7 +104,7 @@ class BillingServiceTest {
 
         @Test
         void refusesWhenBillingDisabled() {
-            ReflectionTestUtils.setField(service, "billingEnabled", false);
+            when(config.getBoolean("billing.enabled", true)).thenReturn(false);
 
             ChargeOutcome outcome = service.chargeUser(user(), 1000, "test", "TEST", null);
 
@@ -122,7 +126,7 @@ class BillingServiceTest {
         @Test
         void allowsLiveStripeKeyWhenExplicitlyEnabled() throws GatewayException {
             when(gateway.mode()).thenReturn("stripe-live");
-            ReflectionTestUtils.setField(service, "allowLiveCharges", true);
+            when(config.getBoolean("billing.allow-live-charges", false)).thenReturn(true);
             stubChargeSuccess();
 
             assertThat(service.chargeUser(user(), 1000, "test", "TEST", null).succeeded()).isTrue();

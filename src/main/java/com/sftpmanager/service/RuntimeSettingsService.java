@@ -28,6 +28,7 @@ public class RuntimeSettingsService {
         return repository.findById(id).map(existing -> {
             existing.setName(updated.getName());
             existing.setValue(updated.getValue());
+            existing.setDescription(updated.getDescription());
             existing.setLastUpdatedBy(updated.getLastUpdatedBy());
             return repository.save(existing);
         }).orElseThrow(() -> new RuntimeException("RuntimeSettings not found: " + id));

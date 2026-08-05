@@ -144,7 +144,7 @@
         </div>
         <div class="table-card">
             <table class="table table-hover mb-0">
-                <thead class="table-light"><tr><th>Name</th><th>Value</th><th>Last Updated</th><th></th></tr></thead>
+                <thead class="table-light"><tr><th>Name</th><th>Value</th><th>Description</th><th>Last Updated</th><th></th></tr></thead>
                 <tbody id="settings-tbody"></tbody>
             </table>
         </div>
@@ -763,10 +763,11 @@ async function loadControls() {
 async function loadSettings() {
     const rows = await fetch(`${API}/runtimesettings`).then(r=>r.json()).catch(()=>[]);
     const tbody = document.getElementById('settings-tbody');
-    if (!rows.length) { empty('settings-tbody', 4); return; }
+    if (!rows.length) { empty('settings-tbody', 5); return; }
     tbody.innerHTML = rows.map(r => `<tr>
         <td><code>${r.name||''}</code></td>
         <td class="text-muted">${r.value||''}</td>
+        <td class="text-muted small">${r.description||''}</td>
         <td>${fmt(r.lastUpdatedDate)}</td>
         ${actionBtns(`editSetting(${r.id})`,`deleteSetting(${r.id})`)}
     </tr>`).join('');
@@ -1349,14 +1350,18 @@ function openSettingsForm(data={}) {
             <label class="form-label small fw-semibold">Value</label>
             <textarea class="form-control form-control-sm" id="stgValue" rows="3"></textarea>
         </div>
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Description <span class="text-muted fw-normal">(what this setting does)</span></label>
+            <textarea class="form-control form-control-sm" id="stgDescription" rows="2"></textarea>
+        </div>
         ${footerBtns('saveSetting')}
     `);
-    if (data.id) { setVal('stgName', data.name); setVal('stgValue', data.value); }
+    if (data.id) { setVal('stgName', data.name); setVal('stgValue', data.value); setVal('stgDescription', data.description); }
 }
 
 async function saveSetting() {
     if (!validateForm([['stgName', V.required]])) return;
-    const body = { name: getVal('stgName'), value: getVal('stgValue') };
+    const body = { name: getVal('stgName'), value: getVal('stgValue'), description: getVal('stgDescription') || null };
     const url = editingId ? `${API}/runtimesettings/${editingId}` : `${API}/runtimesettings`;
     const r = await fetch(url, {method: editingId?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
     if (r.ok) { closeModal(); loadSettings(); }

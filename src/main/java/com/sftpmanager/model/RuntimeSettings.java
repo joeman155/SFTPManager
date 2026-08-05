@@ -17,6 +17,9 @@ public class RuntimeSettings {
     @Column(name = "value", columnDefinition = "TEXT")
     private String value;
 
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
     @Column(name = "creation_date", updatable = false)
     private LocalDateTime creationDate;
 
@@ -72,6 +75,13 @@ public class RuntimeSettings {
 
     public void setValue(String value) {
         this.value = value;
+    }
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
     public LocalDateTime getCreationDate() {
         return creationDate;

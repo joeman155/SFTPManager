@@ -6,12 +6,14 @@ import com.sftpmanager.repository.UserRepository;
 import com.sftpmanager.service.BillingService;
 import com.sftpmanager.service.BillingService.ChargeOutcome;
 import com.sftpmanager.service.EmailService;
+import com.sftpmanager.service.RuntimeConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -27,19 +29,23 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class BillingSchedulerTest {
 
     @Mock private UserRepository userRepository;
     @Mock private BillingService billingService;
     @Mock private EmailService emailService;
+    @Mock private RuntimeConfigService config;
 
     private BillingScheduler scheduler;
 
     @BeforeEach
     void setUp() {
-        scheduler = new BillingScheduler(userRepository, billingService, emailService);
-        ReflectionTestUtils.setField(scheduler, "enabled", true);
-        ReflectionTestUtils.setField(scheduler, "dryRun", false);
+        scheduler = new BillingScheduler(userRepository, billingService, emailService, config);
+        // Defaults mirroring the old application.properties fallbacks —
+        // individual tests override via when(...) to exercise a non-default.
+        when(config.getBoolean("billing.scheduler.enabled", true)).thenReturn(true);
+        when(config.getBoolean("billing.scheduler.dry-run", true)).thenReturn(false);
     }
 
     /** A user who is due for billing today by every rule. */
@@ -64,7 +70,7 @@ class BillingSchedulerTest {
 
     @Test
     void scheduledRunDoesNothingWhenDisabled() {
-        ReflectionTestUtils.setField(scheduler, "enabled", false);
+        when(config.getBoolean("billing.scheduler.enabled", true)).thenReturn(false);
 
         scheduler.runMonthlyBilling();
 
@@ -74,7 +80,7 @@ class BillingSchedulerTest {
     @Test
     void dryRunCountsDueUsersButChargesNothing() {
         when(userRepository.findAll()).thenReturn(List.of(dueUser()));
-        ReflectionTestUtils.setField(scheduler, "dryRun", true);
+        when(config.getBoolean("billing.scheduler.dry-run", true)).thenReturn(true);
 
         String summary = scheduler.billUsersDueToday();
 

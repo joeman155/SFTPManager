@@ -53,29 +53,20 @@ public class BillingService {
     @Value("${stripe.publishable-key:}")
     private String stripePublishableKey;
 
-    @Value("${billing.enabled:true}")
-    private boolean billingEnabled;
-
-    @Value("${billing.allow-live-charges:false}")
-    private boolean allowLiveCharges;
-
-    @Value("${billing.max-charge-cents:50000}")
-    private long maxChargeCents;
-
-    @Value("${billing.max-charges-per-user-per-day:2}")
-    private long maxChargesPerUserPerDay;
-
-    @Value("${billing.max-charges-per-day:50}")
-    private long maxChargesPerDay;
-
-    @Value("${billing.currency:aud}")
-    private String currency;
+    // All billing.* behaviour (enabled, allow-live-charges, per-charge/day
+    // caps, currency) is admin-editable at runtime — see RuntimeConfigService
+    // and DataInitialiser for the seeded defaults. Stripe keys stay as @Value
+    // (env-injected secrets), never runtime_settings (admin UI renders that
+    // table's values in plaintext).
+    private final RuntimeConfigService config;
 
     private PaymentGateway gateway;
 
-    public BillingService(UserRepository userRepository, PaymentRepository paymentRepository) {
+    public BillingService(UserRepository userRepository, PaymentRepository paymentRepository,
+                          RuntimeConfigService config) {
         this.userRepository = userRepository;
         this.paymentRepository = paymentRepository;
+        this.config = config;
     }
 
     @PostConstruct
@@ -86,7 +77,12 @@ public class BillingService {
         } else {
             gateway = new StripeGateway(stripeSecretKey);
             log.info("BILLING: Stripe gateway active, mode={}", gateway.mode());
-            if ("stripe-live".equals(gateway.mode()) && !allowLiveCharges) {
+            // NOTE: on the very first boot ever (empty runtime_settings) this
+            // reads the fallback default rather than an admin-set value,
+            // since DataInitialiser's seeding runs after all @PostConstruct
+            // methods. Cosmetic only — chargeBlockReason() re-checks live on
+            // every real charge, so actual enforcement is always correct.
+            if ("stripe-live".equals(gateway.mode()) && !config.getBoolean("billing.allow-live-charges", false)) {
                 log.error("BILLING: LIVE Stripe key configured but billing.allow-live-charges=false — ALL charges will be refused until it is enabled");
             }
         }
@@ -96,26 +92,26 @@ public class BillingService {
 
     public String getPublishableKey() { return stripePublishableKey; }
 
-    public String getCurrency() { return currency; }
+    public String getCurrency() { return config.getString("billing.currency", "aud"); }
 
     /** Guardrail + mode info, shown in admin and used by the test plan. */
     public Map<String, Object> status() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("mode", gateway.mode());
-        m.put("billingEnabled", billingEnabled);
-        m.put("allowLiveCharges", allowLiveCharges);
+        m.put("billingEnabled", config.getBoolean("billing.enabled", true));
+        m.put("allowLiveCharges", config.getBoolean("billing.allow-live-charges", false));
         m.put("chargingPossible", chargeBlockReason() == null);
         m.put("chargeBlockReason", chargeBlockReason());
-        m.put("maxChargeCents", maxChargeCents);
-        m.put("maxChargesPerUserPerDay", maxChargesPerUserPerDay);
-        m.put("maxChargesPerDay", maxChargesPerDay);
-        m.put("currency", currency);
+        m.put("maxChargeCents", config.getLong("billing.max-charge-cents", 50000L));
+        m.put("maxChargesPerUserPerDay", config.getLong("billing.max-charges-per-user-per-day", 2L));
+        m.put("maxChargesPerDay", config.getLong("billing.max-charges-per-day", 50L));
+        m.put("currency", config.getString("billing.currency", "aud"));
         return m;
     }
 
     private String chargeBlockReason() {
-        if (!billingEnabled) return "billing.enabled=false";
-        if ("stripe-live".equals(gateway.mode()) && !allowLiveCharges)
+        if (!config.getBoolean("billing.enabled", true)) return "billing.enabled=false";
+        if ("stripe-live".equals(gateway.mode()) && !config.getBoolean("billing.allow-live-charges", false))
             return "Live Stripe key present but billing.allow-live-charges=false";
         return null;
     }
@@ -323,15 +319,20 @@ public class BillingService {
             return new ChargeOutcome(false, "Charging disabled: " + block, null);
         }
         if (amountCents <= 0) return new ChargeOutcome(false, "Amount must be positive", null);
+        // Read guardrails once so a single logical charge attempt is
+        // internally consistent even if an admin edits a setting mid-call.
+        long maxChargeCents = config.getLong("billing.max-charge-cents", 50000L);
         if (amountCents > maxChargeCents) {
             log.warn("BILLING: charge refused for {} — amount {} exceeds cap {}", user.getEmail(), amountCents, maxChargeCents);
             return new ChargeOutcome(false, "Amount exceeds billing.max-charge-cents (" + maxChargeCents + ")", null);
         }
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        long maxChargesPerUserPerDay = config.getLong("billing.max-charges-per-user-per-day", 2L);
         if (paymentRepository.countByUserIdAndCreatedAtAfter(user.getId(), startOfDay) >= maxChargesPerUserPerDay) {
             log.warn("BILLING: charge refused for {} — per-user daily limit reached", user.getEmail());
             return new ChargeOutcome(false, "Daily charge limit reached for this user (billing.max-charges-per-user-per-day)", null);
         }
+        long maxChargesPerDay = config.getLong("billing.max-charges-per-day", 50L);
         if (paymentRepository.countByCreatedAtAfter(startOfDay) >= maxChargesPerDay) {
             log.warn("BILLING: charge refused — GLOBAL daily limit reached");
             return new ChargeOutcome(false, "Global daily charge limit reached (billing.max-charges-per-day)", null);
@@ -344,23 +345,25 @@ public class BillingService {
         try { customerId = ensureCustomer(user); }
         catch (GatewayException e) { return new ChargeOutcome(false, "Gateway error: " + e.getMessage(), null); }
 
+        String currency = config.getString("billing.currency", "aud");
+
         // Primary first, then backup
         if (user.getCcPmId() != null) {
             ChargeOutcome primary = attempt(user, customerId, user.getCcPmId(), SLOT_PRIMARY,
                 cardDisplay(user.getCcBrand(), user.getCcLast4()),
-                amountCents, description, initiatedBy, idempotencyKey);
+                amountCents, currency, description, initiatedBy, idempotencyKey);
             if (primary.succeeded()) return primary;
             if (user.getBackupCcPmId() == null) return primary;
             log.info("BILLING: primary card failed for {}, trying backup", user.getEmail());
         }
         return attempt(user, customerId, user.getBackupCcPmId(), SLOT_BACKUP,
             cardDisplay(user.getBackupCcBrand(), user.getBackupCcLast4()),
-            amountCents, description, initiatedBy,
+            amountCents, currency, description, initiatedBy,
             idempotencyKey != null ? idempotencyKey + "-backup" : null);
     }
 
     private ChargeOutcome attempt(User user, String customerId, String pmId, String slot, String display,
-                                  long amountCents, String description, String initiatedBy, String idempotencyKey) {
+                                  long amountCents, String currency, String description, String initiatedBy, String idempotencyKey) {
         Payment p = new Payment();
         p.setUser(user);
         p.setAmountCents(amountCents);
