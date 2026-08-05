@@ -598,7 +598,7 @@ function renderUsersTable() {
         <td>${u.firstName||''} ${u.surname||''}${u.phone ? `<div class="text-muted" style="font-size:.72rem"><i class="bi bi-telephone me-1"></i>${u.phone}</div>` : ''}</td>
         <td>${u.email||''}${u.signupIp ? `<div class="text-muted" style="font-size:.72rem" title="IP address captured at signup"><i class="bi bi-geo-alt me-1"></i>${u.signupIp}</div>` : ''}</td>
         <td>${u.company||''}</td>
-        <td>${u.accountControls ? `<span class="badge bg-primary-subtle text-primary">${u.accountControls.plan}</span>` : '<span class="text-muted">—</span>'}</td>
+        <td>${u.accountControls ? `<span class="badge bg-primary-subtle text-primary">${u.accountControls.plan}</span>` : '<span class="text-muted">—</span>'}${u.paidToDate ? `<div class="text-muted" style="font-size:.72rem"><i class="bi bi-calendar-check me-1"></i>Paid to ${fmt(u.paidToDate)}</div>` : ''}</td>
         <td>${u.country||'—'}</td>
         <td>
             <div class="form-check form-switch mb-0">

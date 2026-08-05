@@ -1124,6 +1124,14 @@ function formatOrdinalDate(v) {
     const [, y, mo, day] = m.map(Number);
     return `${day}${ordinalSuffix(day)} of ${ORDINAL_MONTHS[mo-1]} ${y}`;
 }
+// "dd/MON/yyyy" — e.g. "24/SEP/2026". Used for the paid-to-date shown in the Account modal.
+function formatDdMonYyyy(v) {
+    if (!v) return '';
+    const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return '';
+    const [, y, mo, day] = m.map(Number);
+    return `${String(day).padStart(2,'0')}/${ORDINAL_MONTHS[mo-1].slice(0,3).toUpperCase()}/${y}`;
+}
 function updateTrialBanner(trialExpires) {
     const banner = document.getElementById('trial-banner-top');
     if (!trialExpires) { banner.style.display = 'none'; return; }
@@ -1305,6 +1313,7 @@ async function openAccount(e) {
     document.getElementById('account-plan').innerHTML = (user.accountControls
         ? `<span class="plan-badge" style="cursor:pointer" onclick="openChangePlan()" title="Change plan"><i class="bi bi-check-circle me-1"></i>${user.accountControls.plan}${user.accountControls.monthlyPriceCents ? ` — $${(user.accountControls.monthlyPriceCents/100).toFixed(2)}/month` : ''}</span>`
         : `<span class="text-muted small">No plan selected</span>`)
+        + (user.paidToDate ? ` <span class="text-muted small ms-1">(paid to ${formatDdMonYyyy(user.paidToDate)})</span>` : '')
         + ` <button class="btn btn-sm btn-outline-primary ms-2" onclick="openChangePlan()"><i class="bi bi-arrow-left-right me-1"></i>Change plan</button>`;
 
     // Populate fields
