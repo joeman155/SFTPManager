@@ -419,7 +419,7 @@ public class BillingService {
         Payment p = new Payment();
         p.setUser(user);
         p.setAmountCents(0L);
-        p.setCurrency(currency);
+        p.setCurrency(config.getString("billing.currency", "aud"));
         p.setStatus("SUCCEEDED");
         p.setDescription("Marked paid by admin (no card charge)");
         p.setInitiatedBy("ADMIN:" + adminEmail);
