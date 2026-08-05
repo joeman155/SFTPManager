@@ -54,13 +54,31 @@ public class BillingScheduler {
         billUsersDueToday();
     }
 
+    /** summary = the printable one-liner; failureDetails = "email — reason"
+     *  for every charge refused this run — including guardrail refusals
+     *  (no card, daily limit, billing disabled) that never create a Payment
+     *  row, so they'd otherwise be invisible outside the server log. */
+    public record BillingRunResult(String summary, List<String> failureDetails) {}
+
     /** Extracted so the admin "Run billing now" endpoint can trigger it too. */
     public String billUsersDueToday() {
+        return runBillingPass().summary();
+    }
+
+    /** Same run as billUsersDueToday(), but also returns WHY each failed
+     *  charge was refused — used by the admin "Run billing now" endpoint so
+     *  the reason is visible immediately, with no server-log digging needed. */
+    public BillingRunResult billUsersDueTodayWithDetails() {
+        return runBillingPass();
+    }
+
+    private BillingRunResult runBillingPass() {
         LocalDate today = LocalDate.now();
         // Read once so a single run is internally consistent even if an
         // admin flips the setting while this loop is in progress.
         boolean dryRun = config.getBoolean("billing.scheduler.dry-run", true);
         List<User> users = userRepository.findAll();
+        List<String> failureDetails = new java.util.ArrayList<>();
         int due = 0, charged = 0, failed = 0, skipped = 0;
 
         log.info("BILLING SCHEDULER: run starting for {} (dryRun={})", today, dryRun);
@@ -98,6 +116,7 @@ public class BillingScheduler {
             } else {
                 failed++;
                 log.warn("BILLING SCHEDULER: charge failed for {} — {}", user.getEmail(), outcome.message());
+                failureDetails.add(user.getEmail() + " — " + outcome.message());
                 emailService.sendPaymentFailedEmail(user.getEmail(), user.getFirstName(),
                     String.format("$%.2f", amount / 100.0));
             }
@@ -106,7 +125,7 @@ public class BillingScheduler {
         String summary = String.format("Billing run (dryRun=%s): %d due, %d charged, %d failed, %d skipped (no card)",
             dryRun, due, charged, failed, skipped);
         log.info("BILLING SCHEDULER: {}", summary);
-        return summary;
+        return new BillingRunResult(summary, failureDetails);
     }
 
     public boolean isDryRun() { return config.getBoolean("billing.scheduler.dry-run", true); }

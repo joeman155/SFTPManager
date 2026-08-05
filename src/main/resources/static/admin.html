@@ -276,7 +276,11 @@ async function runBillingNow() {
     if (!confirm('Run the monthly billing pass now? (In dry-run mode this only logs what would be charged.)')) return;
     const r = await fetch(`${API}/billing/run-billing`, {method:'POST'});
     const data = await r.json().catch(()=>({}));
-    alert(data.summary || 'Billing run failed');
+    let msg = data.summary || 'Billing run failed';
+    if (data.failures && data.failures.length) {
+        msg += '\n\nFailed charges:\n' + data.failures.map(f => '• ' + f).join('\n');
+    }
+    alert(msg);
     loadUsers();
 }
 

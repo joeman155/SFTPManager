@@ -163,4 +163,48 @@ class BillingSchedulerTest {
         assertThat(summary).contains("1 skipped");
         verifyNoInteractions(billingService);
     }
+
+    // ══ billUsersDueTodayWithDetails — surfaces WHY a charge failed ══
+
+    @Test
+    void withDetailsExposesTheFailureReasonPerUser() {
+        User u = dueUser();
+        when(userRepository.findAll()).thenReturn(List.of(u));
+        when(billingService.chargeUser(any(), anyLong(), anyString(), anyString(), anyString()))
+            .thenReturn(new ChargeOutcome(false, "Payment failed: Your card was declined. (mock)", null));
+
+        BillingScheduler.BillingRunResult result = scheduler.billUsersDueTodayWithDetails();
+
+        assertThat(result.summary()).contains("1 failed");
+        assertThat(result.failureDetails())
+            .containsExactly("due@example.com — Payment failed: Your card was declined. (mock)");
+    }
+
+    @Test
+    void withDetailsExposesGuardrailRefusalsThatNeverCreateAPaymentRow() {
+        // e.g. "User has no saved card" — chargeUser() returns before any
+        // Payment row is written, so the reason would otherwise be visible
+        // ONLY in the server log. This is exactly what the admin UI needs.
+        User u = dueUser();
+        when(userRepository.findAll()).thenReturn(List.of(u));
+        when(billingService.chargeUser(any(), anyLong(), anyString(), anyString(), anyString()))
+            .thenReturn(new ChargeOutcome(false, "Charging disabled: billing.enabled=false", null));
+
+        BillingScheduler.BillingRunResult result = scheduler.billUsersDueTodayWithDetails();
+
+        assertThat(result.failureDetails())
+            .containsExactly("due@example.com — Charging disabled: billing.enabled=false");
+    }
+
+    @Test
+    void withDetailsReturnsEmptyListWhenNothingFails() {
+        User u = dueUser();
+        when(userRepository.findAll()).thenReturn(List.of(u));
+        when(billingService.chargeUser(eq(u), eq(2900L), anyString(), eq("SCHEDULER"), anyString()))
+            .thenReturn(new ChargeOutcome(true, "Payment succeeded", null));
+
+        BillingScheduler.BillingRunResult result = scheduler.billUsersDueTodayWithDetails();
+
+        assertThat(result.failureDetails()).isEmpty();
+    }
 }

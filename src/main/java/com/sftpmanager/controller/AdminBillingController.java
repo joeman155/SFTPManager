@@ -174,10 +174,12 @@ public class AdminBillingController {
         return ResponseEntity.ok(paymentRepository.findByUserIdOrderByCreatedAtDesc(userId));
     }
 
-    /** Manually trigger the monthly billing pass (honours dry-run setting). */
+    /** Manually trigger the monthly billing pass (honours dry-run setting).
+     *  Includes the reason for each failed/refused charge, so it's visible
+     *  immediately without digging through server logs. */
     @PostMapping("/run-billing")
     public ResponseEntity<?> runBilling() {
-        String summary = billingScheduler.billUsersDueToday();
-        return ResponseEntity.ok(Map.of("summary", summary));
+        var result = billingScheduler.billUsersDueTodayWithDetails();
+        return ResponseEntity.ok(Map.of("summary", result.summary(), "failures", result.failureDetails()));
     }
 }
