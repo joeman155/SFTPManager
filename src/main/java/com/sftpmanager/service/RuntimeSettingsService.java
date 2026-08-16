@@ -18,7 +18,7 @@ public class RuntimeSettingsService {
     }
 
 
-    public List<RuntimeSettings> findAll() { return repository.findAll(); }
+    public List<RuntimeSettings> findAll() { return repository.findAllByOrderByNameAsc(); }
     public Optional<RuntimeSettings> findById(Long id) { return repository.findById(id); }
     public Optional<RuntimeSettings> findByName(String name) { return repository.findByName(name); }
     public RuntimeSettings save(RuntimeSettings setting) { return repository.save(setting); }
