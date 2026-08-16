@@ -31,13 +31,13 @@ public class DataInitialiser implements CommandLineRunner {
         // Seed plans (account controls) if empty
         if (accountControlsRepository.count() == 0) {
             AccountControls trial = new AccountControls();
-            trial.setPlan("7 Day Trial");
-            trial.setDescription("Try SFTP Manager free for 7 days. 1 SFTP service. 100MB storage. Email support. No credit card required.");
+            trial.setPlan("14 Day Trial");
+            trial.setDescription("Try SFTP Manager free for 14 days. 1 SFTP service. 100MB storage. Email support. No credit card required.");
             trial.setMonthlyPriceCents(null); // free — never billed
             trial.setMaxUsers(5);
             trial.setMaxServers(1);
             trial.setMaxStorageMb(100L); // 100MB, as the description promises
-            trial.setTrialDays(7);
+            trial.setTrialDays(14);
             trial.setCreatedBy("system");
             trial.setLastUpdatedBy("system");
             accountControlsRepository.save(trial);
