@@ -9,14 +9,14 @@ metadata:
     # Use GKE's native HTTP(S) load balancer
     kubernetes.io/ingress.class: "gce"
     # Link to the ManagedCertificate
-    networking.gke.io/managed-certificates: "sftp-leederville-cert"
+    networking.gke.io/managed-certificates: "app-proficiens-cert"
     # Force HTTPS
     kubernetes.io/ingress.allow-http: "true"
     # Static IP (we'll create this below)
     kubernetes.io/ingress.global-static-ip-name: "sftp-manager-ip"
 spec:
   rules:
-    - host: sftp.leederville.net
+    - host: app.proficiens.io
       http:
         paths:
           - path: /

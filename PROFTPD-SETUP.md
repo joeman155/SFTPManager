@@ -490,7 +490,7 @@ Notes:
 
 ### 9. Public IP + port 22 redirect (iptables PREROUTING)
 
-Goal: customers connect with plain `sftp customer@sftphost001.leederville.net`
+Goal: customers connect with plain `sftp customer@sftphost001.proficiens.io`
 (port 22, every client's default) while ProFTPD actually listens on 2222 and
 admin SSH moves to 2200.
 
@@ -571,10 +571,10 @@ sudo netfilter-persistent save
 
 #### 9.6 DNS
 
-Wherever leederville.net is hosted:
+Wherever proficiens.io is hosted:
 
 ```
-sftphost001.leederville.net.  A  <THE-IP>
+sftphost001.proficiens.io.  A  <THE-IP>
 ```
 
 (That's the hostname the app hands to customers via the `sftphost001`
@@ -583,9 +583,9 @@ runtime setting — no app change needed.)
 #### 9.7 Test from outside
 
 ```bash
-sftp -P 22   customer@sftphost001.leederville.net   # via the redirect
-sftp -P 2222 customer@sftphost001.leederville.net   # direct — keep this working too
-ssh  -p 2200 you@sftphost001.leederville.net        # admin access intact
+sftp -P 22   customer@sftphost001.proficiens.io   # via the redirect
+sftp -P 2222 customer@sftphost001.proficiens.io   # direct — keep this working too
+ssh  -p 2200 you@sftphost001.proficiens.io        # admin access intact
 ```
 
 Keep 2222 reachable as well as 22 — some corporate networks only allow

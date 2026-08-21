@@ -21,7 +21,7 @@ public class EmailService {
     @Value("${app.mail.from}")
     private String fromAddress;
 
-    @Value("${app.support-email:support@leederville.net}")
+    @Value("${app.support-email:support@proficiens.io}")
     private String supportEmail;
 
     public EmailService(JavaMailSender mailSender,
@@ -41,7 +41,7 @@ public class EmailService {
                 </a>
                 <p style="color:#6b7280;font-size:.85rem">This link expires in 24 hours. If you didn't request this, ignore this email.</p>
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager · sftp.leederville.net</p>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager · app.proficiens.io</p>
             </div>
             """.formatted(link);
         sendHtml(toEmail, "Verify your SFTP Manager email", html);
@@ -59,7 +59,7 @@ public class EmailService {
                 <p style="color:#6b7280;font-size:.85rem">This code expires in 15 minutes.<br/>
                 If you didn't sign in to SFTP Manager, ignore this email.</p>
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; app.proficiens.io</p>
             </div>
             """.formatted(code);
         sendHtml(toEmail, "Your SFTP Manager verification code: " + code, html);
@@ -77,7 +77,7 @@ public class EmailService {
                 </a>
                 <p style="color:#6b7280;font-size:.85rem">If you didn't request this, ignore this email — your password will not change.</p>
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; app.proficiens.io</p>
             </div>
             """.formatted(link);
         sendHtml(toEmail, "Reset your SFTP Manager password", html);
@@ -98,7 +98,7 @@ public class EmailService {
                 </a>
                 <p style="color:#6b7280;font-size:.85rem">If you weren't expecting this, contact %s.</p>
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; app.proficiens.io</p>
             </div>
             """.formatted(firstName, link, supportEmail);
         sendHtml(toEmail, "Welcome to SFTP Manager — set your password", html);
@@ -116,7 +116,7 @@ public class EmailService {
                 </a>
                 <p style="color:#6b7280;font-size:.85rem">If no payment method is added, your services will be deactivated when the trial ends.</p>
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; app.proficiens.io</p>
             </div>
             """.formatted(firstName != null && !firstName.isBlank() ? firstName : "there", baseUrl);
         sendHtml(toEmail, "Your SFTP Manager trial ends tomorrow", html);
@@ -134,7 +134,7 @@ public class EmailService {
                     Reactivate my account
                 </a>
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; app.proficiens.io</p>
             </div>
             """.formatted(firstName != null && !firstName.isBlank() ? firstName : "there", baseUrl);
         sendHtml(toEmail, "Your SFTP Manager trial has ended — services deactivated", html);
@@ -162,7 +162,7 @@ public class EmailService {
                     Update payment details
                 </a>
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; sftp.leederville.net</p>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager &middot; app.proficiens.io</p>
             </div>
             """.formatted(firstName != null && !firstName.isBlank() ? firstName : "there", amountDisplay, baseUrl);
         sendHtml(toEmail, "SFTP Manager — payment failed, action needed", html);
@@ -238,7 +238,7 @@ public class EmailService {
                 </a>
                 <p style="color:#6b7280;font-size:.85rem">If you have any questions, reply to this email and we'll be happy to help.</p>
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager · sftp.leederville.net</p>
+                <p style="color:#9ca3af;font-size:.78rem">SFTP Manager · app.proficiens.io</p>
             </div>
             """.formatted(baseUrl);
     }

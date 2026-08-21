@@ -302,7 +302,7 @@ Decision tree (same logic for portal self-service and admin-driven changes):
    `paidToDate` resets to one month from today on success.
 3. **Currently paid up, moving to a lower price** →
    - Portal (self-service): **not automatic** — routes to a message box that
-     emails support@leederville.net; nothing changes until a human actions it.
+     emails support@proficiens.io; nothing changes until a human actions it.
    - Admin: applied immediately, no charge, existing `paidToDate` left as-is.
 4. **Not currently in a paid, active cycle** (trial/expired/none) → normal
    first-month billing (as in onboarding).

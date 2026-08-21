@@ -284,7 +284,7 @@ public class PortalController {
             // Auto-assign host from runtime settings
             String host = runtimeSettingsRepository.findByName("sftphost001")
                 .map(s -> s.getValue())
-                .orElse("sftphost001.leederville.net");
+                .orElse("sftphost001.proficiens.io");
             service.setHost(host);
             service.setDescription(service.getDescription());
             return ResponseEntity.status(HttpStatus.CREATED).body(sftpServiceRepository.save(service));

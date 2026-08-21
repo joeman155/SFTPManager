@@ -2,8 +2,8 @@
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
 metadata:
-  name: sftp-leederville-cert
+  name: app-proficiens-cert
   namespace: sftp-manager
 spec:
   domains:
-    - sftp.leederville.net
+    - app.proficiens.io

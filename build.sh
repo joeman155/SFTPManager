@@ -11,7 +11,7 @@ REGION="australia-southeast1"
 CLUSTER_NAME="sftp-manager-cluster"
 ARTIFACT_REPO="sftp-manager"
 IMAGE_NAME="sftp-manager"
-DOMAIN="sftp.leederville.net"
+DOMAIN="app.proficiens.io"
 # ─────────────────────────────────────────────────────────────────
 
 IMAGE_URL="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPO}/${IMAGE_NAME}"

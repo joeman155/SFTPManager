@@ -18,7 +18,7 @@ gcloud compute addresses describe sftp-manager-ip \
 
 echo ""
 echo "Point your DNS A record to this IP:"
-echo "  sftp.leederville.net  →  <IP above>"
+echo "  app.proficiens.io  →  <IP above>"
 echo ""
 echo "Then deploy the app and Google will auto-provision the SSL cert."
 echo "Cert provisioning takes 10-15 minutes after DNS propagates."

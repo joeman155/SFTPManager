@@ -1,4 +1,4 @@
-# Deploying to GKE — sftp.leederville.net
+# Deploying to GKE — app.proficiens.io
 
 ## Prerequisites (one-time installs)
 ```bash
@@ -93,7 +93,7 @@ kubectl get ingress -n sftp-manager
 ```
 In your DNS provider, create:
 ```
-A record:  sftp.leederville.net  →  <EXTERNAL-IP>
+A record:  app.proficiens.io  →  <EXTERNAL-IP>
 ```
 
 ## Step 8 — Update Google OAuth redirect URI
@@ -101,7 +101,7 @@ Go to Google Cloud Console → APIs & Services → Credentials → your OAuth cl
 
 Add this to Authorised redirect URIs:
 ```
-https://sftp.leederville.net/login/oauth2/code/google
+https://app.proficiens.io/login/oauth2/code/google
 ```
 
 ## Useful commands

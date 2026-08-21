@@ -32,7 +32,7 @@ flowchart TD
     N -->|Admin| O["Switch plan immediately<br/>NO charge, paidToDate left AS-IS"]
     N -->|Portal self-service| P["Refused automatically —<br/>UI swaps to a message box"]
     P --> Q[User types a message, submits]
-    Q --> R["Email to support@leederville.net:<br/>name, current plan, requested plan, message"]
+    Q --> R["Email to support@proficiens.io:<br/>name, current plan, requested plan, message"]
     R --> S["Nothing changes automatically —<br/>a human actions it within 1 business day"]
 ```
 

@@ -44,7 +44,7 @@ public class SftpServiceService {
         // Auto-assign host from runtime settings, same as the customer portal.
         String host = runtimeSettingsRepository.findByName("sftphost001")
             .map(s -> s.getValue())
-            .orElse("sftphost001.leederville.net");
+            .orElse("sftphost001.proficiens.io");
         service.setHost(host);
         return sftpServiceRepository.save(service);
     }

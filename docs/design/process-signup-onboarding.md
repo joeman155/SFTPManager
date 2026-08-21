@@ -57,7 +57,7 @@ flowchart TD
 </details>
 
 **Key points**
-- Support (`support@leederville.net`) gets notified twice per completed
+- Support (`support@proficiens.io`) gets notified twice per completed
   signup: once at account creation, once at onboarding completion (with the
   plan chosen and whether payment succeeded) — the gap between the two is
   itself useful signal (accounts created but never onboarded).

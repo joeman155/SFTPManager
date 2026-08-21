@@ -35,7 +35,7 @@ public class PortalAuthController {
     @Value("${recaptcha.secret-key:}")
     private String recaptchaSecretKey;
 
-    @Value("${app.support-email:support@leederville.net}")
+    @Value("${app.support-email:support@proficiens.io}")
     private String supportEmail;
 
     public PortalAuthController(UserRepository userRepository,

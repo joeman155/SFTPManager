@@ -941,7 +941,7 @@ async function addressAutocomplete(input, prefix) {
             // Also try street number extraction from query
             const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=8&countrycodes=`;
             const res = await fetch(url, {
-                headers: { 'Accept-Language': 'en', 'User-Agent': 'SFTPManager/1.0 (sftp.leederville.net)' }
+                headers: { 'Accept-Language': 'en', 'User-Agent': 'SFTPManager/1.0 (app.proficiens.io)' }
             });
             const results = await res.json();
 

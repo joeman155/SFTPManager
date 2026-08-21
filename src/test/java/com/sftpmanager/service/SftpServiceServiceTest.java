@@ -60,7 +60,7 @@ class SftpServiceServiceTest {
 
         SftpService saved = service.save(new SftpService(), null);
 
-        assertThat(saved.getHost()).isEqualTo("sftphost001.leederville.net");
+        assertThat(saved.getHost()).isEqualTo("sftphost001.proficiens.io");
     }
 
     @Test

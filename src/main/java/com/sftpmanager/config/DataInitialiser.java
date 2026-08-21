@@ -100,7 +100,7 @@ public class DataInitialiser implements CommandLineRunner {
         if (runtimeSettingsRepository.findByName("sftphost001").isEmpty()) {
             RuntimeSettings host = new RuntimeSettings();
             host.setName("sftphost001");
-            host.setValue("sftphost001.leederville.net");
+            host.setValue("sftphost001.proficiens.io");
             host.setCreatedBy("system");
             host.setLastUpdatedBy("system");
             runtimeSettingsRepository.save(host);
@@ -120,7 +120,7 @@ public class DataInitialiser implements CommandLineRunner {
                         <li>🛡️ Configure IP whitelists to secure your connections</li>
                         <li>📱 Access your dashboard anytime from any device</li>
                     </ul>
-                    <a href="https://sftp.leederville.net/portal"
+                    <a href="https://app.proficiens.io/portal"
                        style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0">
                         Go to my dashboard
                     </a>
@@ -129,7 +129,7 @@ public class DataInitialiser implements CommandLineRunner {
                     </p>
                     <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
                     <p style="color:#9ca3af;font-size:.78rem">
-                        SFTP Manager &middot; <a href="https://sftp.leederville.net">sftp.leederville.net</a>
+                        SFTP Manager &middot; <a href="https://app.proficiens.io">app.proficiens.io</a>
                     </p>
                 </div>""");
             welcome.setCreatedBy("system");
@@ -152,7 +152,7 @@ public class DataInitialiser implements CommandLineRunner {
                     <li>Subscription fees are billed monthly and are non-refundable.</li>
                     <li>We reserve the right to change these terms with 30 days notice.</li>
                 </ol>
-                <p>For questions contact <a href="mailto:support@leederville.net">support@leederville.net</a></p>
+                <p>For questions contact <a href="mailto:support@proficiens.io">support@proficiens.io</a></p>
             """);
             tc.setCreatedBy("system");
             tc.setLastUpdatedBy("system");
